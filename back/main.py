@@ -206,33 +206,6 @@ async def parse_todo(request: TodoRequest):
             detail=f"Todo 파싱 중 오류 발생: {str(e)}"
         )
 
-#============================================== OAUTH HELPER ===============================================
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    try:
-        token = credentials.credentials
-
-        # Supabase에서 사용자 정보 가져오기
-        response = supabase_client.auth.get_user(token)
-
-        if not response.user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        return response.user
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
 #============================================== SAVE DB ===============================================
 
 # DB 저장을 위한 모델 (user_id 추가)
@@ -278,6 +251,31 @@ class OAuthLoginRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        token = credentials.credentials
+        
+        # Supabase에서 사용자 정보 가져오기
+        response = supabase_client.auth.get_user(token)
+        
+        if not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return response.user
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 # login
 @app.post("/auth/oauth/login")
