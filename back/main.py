@@ -43,6 +43,18 @@ async def root():
         "version": "1.0.0"
     }
 
+# default
+
+class testmodel(BaseModel):
+    testmsg: str
+class reptest(BaseModel):
+    retmsg: str
+
+@app.post("/test", response_model=reptest)
+async def parse_todo(request: testmodel):
+    return request.testmsg
+
+
 # AI - fucking god damn
 
 #prompt
@@ -113,7 +125,7 @@ class TodoItem(BaseModel):
 class TodoResponse(BaseModel):
     original_message: str
     todos: List[TodoItem]
-
+    todo_count: int
 #request data model
 class TodoRequest(BaseModel):
     message: str
