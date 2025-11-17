@@ -139,14 +139,13 @@ async def parse_todo(request: TodoRequest):
         
         response_text = response_text.strip()
         
-        # JSON 파싱
         parsed_data = json.loads(response_text)
-        
-        # TodoItem 객체로 변환
+
         todos = [TodoItem(**todo) for todo in parsed_data.get("todos", [])]
         return TodoResponse(
             original_message=request.message,
-            todos=todos
+            todos=todos,
+            todo_count=len(todos) 
         )
     # error1 jsondecode
     except json.JSONDecodeError as e:
@@ -167,51 +166,3 @@ async def parse_todo(request: TodoRequest):
 def sendTodoList(data: TodoItem):
     response = supabase_client.table("test").insert({"user_id": data.user_id, "title": data.title,"created_at": data.created_at, "description": data.description, "event_date": data.date, "event_time": data.time, "location": data.location, "priority": data.priority, "status": data.status}).execute()
     return True
-
-@app.get("/testcase1")
-async def testcase1():
-    """
-    테스트케이스 1: AI Todo 파싱 테스트
-    """
-    try:
-        # 테스트 메시지
-        test_message = "내일 오후 3시까지 회의 자료 준비하고, 이번 주 금요일까지 프로젝트 보고서 작성해야 해. 그리고 장보기도 해야 함"
-        
-        # AI 파싱 요청
-        today = datetime.now().strftime("%Y-%m-%d")
-        prompt = TODO_EXTRACTION_PROMPT.format(
-            message=test_message,
-            today=today
-        )
-        
-        response = model.generate_content(prompt)
-        response_text = response.text.strip()
-        
-        # JSON 파싱 (마크다운 코드 블록 제거)
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.startswith("```"):
-            response_text = response_text[3:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        
-        response_text = response_text.strip()
-        
-        # JSON 파싱
-        parsed_data = json.loads(response_text)
-        
-        return {
-            "success": True,
-            "test_message": test_message,
-            "today": today,
-            "ai_response": response_text,
-            "parsed_todos": parsed_data.get("todos", []),
-            "todo_count": len(parsed_data.get("todos", []))
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
