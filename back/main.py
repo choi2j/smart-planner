@@ -321,7 +321,6 @@ async def oauth_login(request: OAuthLoginRequest):
 # OAuth callback
 @app.post("/auth/callback")
 async def auth_callback(code: str):
-    """OAuth 콜백 처리"""
     try:
         session = supabase_client.auth.exchange_code_for_session(code)
         
