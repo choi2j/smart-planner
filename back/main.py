@@ -189,4 +189,5 @@ class reptest(BaseModel):
 
 @app.post("/test", response_model=reptest)
 async def parse_todo(request: testmodel):
-    return request.testmsg
+    # 'reptest' 모델과 일치하는 딕셔너리(dict)를 반환합니다.
+    return {"retmsg": request.testmsg}
