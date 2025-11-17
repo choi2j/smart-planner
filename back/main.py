@@ -19,10 +19,10 @@ app = FastAPI(
 )
 
 # gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "your-api-key-here")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCCnfrRNMsL0eHrxpXTpdw34I2oWjx-ua4")
 genai.configure(api_key=GEMINI_API_KEY)
 
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel("gemini-2.0-flash")
 
 # db
 supabase_client: Client = create_client("https://hbypjezxxkevgbzkhjgj.supabase.co/",
@@ -45,6 +45,18 @@ async def root():
         "message": "AI Todo List API",
         "version": "1.0.0"
     }
+
+# default
+
+class testmodel(BaseModel):
+    testmsg: str
+class reptest(BaseModel):
+    retmsg: str
+
+@app.post("/test", response_model=reptest)
+async def parse_todo(request: testmodel):
+    return request.testmsg
+
 
 # AI - fucking god damn
 
@@ -116,8 +128,8 @@ class TodoItem(BaseModel):
 class TodoResponse(BaseModel):
     original_message: str
     todos: List[TodoItem]
-
-# request data model
+    todo_count: int
+#request data model
 class TodoRequest(BaseModel):
     message: str
 
@@ -154,16 +166,23 @@ async def parse_todo(request: TodoRequest):
             print(f"JSON 서브셋 추출 실패: {e}\n원본 응답: {response_text}")
             raise json.JSONDecodeError("Failed to extract JSON subset", response_text, 0)
         
-        # 2. 추출한 문자열로 JSON 파싱 시도
-        parsed_data = json.loads(json_string)
+        # JSON parsing
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        
+        response_text = response_text.strip()
+        
+        parsed_data = json.loads(response_text)
 
-        # --- 여기까지 수정 ---
-
-        # TodoItem 객체로 변환
         todos = [TodoItem(**todo) for todo in parsed_data.get("todos", [])]
         return TodoResponse(
             original_message=request.message,
-            todos=todos
+            todos=todos,
+            todo_count=len(todos) 
         )
         
     # error1 jsondecode
@@ -180,14 +199,10 @@ async def parse_todo(request: TodoRequest):
             status_code=502,
             detail=f"Todo 파싱 중 오류 발생: {str(e)}"
         )
-    
 
-class testmodel(BaseModel):
-    testmsg: str
-class reptest(BaseModel):
-    retmsg: str
+# Save DB
 
-@app.post("/test", response_model=reptest)
-async def parse_todo(request: testmodel):
-    # 'reptest' 모델과 일치하는 딕셔너리(dict)를 반환합니다.
-    return {"retmsg": request.testmsg}
+@app.post('/send-Todo')
+def sendTodoList(data: TodoItem):
+    response = supabase_client.table("test").insert({"user_id": data.user_id, "title": data.title,"created_at": data.created_at, "description": data.description, "event_date": data.date, "event_time": data.time, "location": data.location, "priority": data.priority, "status": data.status}).execute()
+    return True
