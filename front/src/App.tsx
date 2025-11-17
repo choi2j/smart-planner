@@ -1,35 +1,70 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+interface Plan {
+	title: string | "";
+	description: string | "";
+	date: string | "";
+	time: string | "";
+	location: string | "";
+	priority: string | "";
+	status: boolean | null;
 }
 
-export default App
+function App() {
+	const [inputValue, setInputValue] = useState("");
+	const [plans, setPlans] = useState<Plan[]>([
+		{
+			title: "",
+			description: "",
+			date: "",
+			time: "",
+			location: "",
+			priority: "",
+			status: null,
+		},
+	]);
+
+	const handleInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+		setInputValue(event.target.value);
+	};
+
+	const handleSubmit = async () => {
+		if (!inputValue) {
+			console.error("전송할 값이 필요합니다.");
+			return;
+		}
+
+		try {
+			const response = await fetch("http://127.0.0.1:8000/test", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					message: inputValue,
+				}),
+			});
+
+			if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+			const data = await response.json();
+			console.log(data);
+			alert("데이터 전송 성공!");
+			setInputValue("");
+		} catch (error) {
+			console.error(error);
+			alert("데이터 전송 실패!");
+		}
+	};
+
+	return (
+		<>
+			<div>
+				<input type="text" name="" id="" value={inputValue} onChange={handleInput} />
+				<button onClick={handleSubmit}>전송</button>
+			</div>
+		</>
+	);
+}
+
+export default App;
