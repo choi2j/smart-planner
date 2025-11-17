@@ -60,7 +60,7 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         "due_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만 없을경우 null)",
         "due_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만 없을경우 null)",
         "priority": "low/medium/high 중 하나",
-        "priority": false
+        "status": false
         }}
     ]
 }}
@@ -85,7 +85,7 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
             "due_time": "10:00",
             "location": "회사",
             "priority": "high",
-            "priority": false
+            "status": false
         }},
         {{
             "title": "장 보기",
@@ -94,7 +94,7 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
             "due_time": "null",
             "location": "null",
             "priority": "middle",
-            "priority": false
+            "status": false
         }}
     ]
 }}"""
@@ -107,6 +107,7 @@ class TodoItem(BaseModel):
     due_time: Optional[str] = None
     location: Optional[str] = None
     priority: Optional[str] = "medium"  # low, medium, high
+    status: bool = False
 
 # responese data model
 class TodoResponse(BaseModel):
