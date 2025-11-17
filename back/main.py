@@ -104,11 +104,10 @@ async def oauth_login(request: OAuthLoginRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 # OAuth 콜백 처리
-@app.get("/auth/callback")  # ← GET으로 변경
+@app.get("/auth/callback")  # GET으로 변경
 async def auth_callback(code: str):
     """OAuth 콜백 처리"""
     try:
-        # 올바른 방법: 딕셔너리로 전달
         response = supabase_client.auth.exchange_code_for_session({
             "auth_code": code
         })
@@ -123,7 +122,7 @@ async def auth_callback(code: str):
             }
         }
     except Exception as e:
-        print(f"OAuth 콜백 에러: {str(e)}")  # 디버깅용 로그 추가
+        print(f"OAuth 콜백 에러: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 # 현재 사용자 정보
