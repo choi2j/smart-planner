@@ -86,9 +86,9 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         {{
         "title": "할 일 제목 (간결하게)",
         "description": "할 일에 대한 상세 설명",
-        "due_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만 없을경우 null)",
-        "due_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만 없을경우 null)",
-        "location": "해당 행동이 행해져야하는 위치",
+        "due_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만, 없을경우 null)",
+        "due_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만, 없을경우 null)",
+        "location": "해당 행동이 행해져야하는 위치 (언급된 경우만, 없을경우 null)",
         "priority": "low/medium/high 중 하나",
         "status": false
         }}
@@ -100,19 +100,19 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
 2. 우선순위는 맥락에 따라 판단하세요 (급함/중요함 = high, 일반적 = medium, 여유 = low).
 3. 날짜가 "내일", "다음주", "이번주 금요일" 등으로 표현된 경우 구체적인 날짜로 변환하세요 (오늘은 {today}).
 4. description은 원래 메시지의 맥락을 포함하여 작성하세요.
-5. 카테고리는 내용을 보고 적절히 분류하세요.
-6. 반드시 유효한 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
-7. 특정한 위치나 행동의 주체가 실행되어야하는 곳이 문장에 포함되어있을경우 location에 저장하세요
+5. 반드시 유효한 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
+6. null 값은 문자열 "null"이 아닌 JSON null로 표현하세요.
+7. 특정한 위치나 행동의 주체가 실행되어야하는 곳이 문장에 포함되어있을경우 location에 저장하세요.
 
 예시:
-사용자: "내일까지 10시까지 회사보고서 작성하고, 장 봐야 해. 우유랑 계란 사야 함"
+사용자: "내일까지 10시까지 회사에서 보고서 작성하고, 장 봐야 해. 우유랑 계란 사야 함"
 응답:
 {{
     "todos": [
         {{
             "title": "보고서 작성",
-            "description": "내일까지 완료해야 하는 보고서",
-            "due_date": "2025-11-18",
+            "description": "내일까지 완료해야 하는 회사 보고서",
+            "due_date": "2025-11-19",
             "due_time": "10:00",
             "location": "회사",
             "priority": "high",
@@ -120,11 +120,11 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         }},
         {{
             "title": "장 보기",
-            "description": "우유와 계란을 사야함함",
-            "due_date": "null",
-            "due_time": "null",
-            "location": "null",
-            "priority": "middle",
+            "description": "우유와 계란을 사야함",
+            "due_date": null,
+            "due_time": null,
+            "location": null,
+            "priority": "medium",
             "status": false
         }}
     ]
@@ -145,6 +145,7 @@ class TodoResponse(BaseModel):
     original_message: str
     todos: List[TodoItem]
     todo_count: int
+
 #request data model
 class TodoRequest(BaseModel):
     message: str
@@ -160,19 +161,7 @@ async def parse_todo(request: TodoRequest):
         response = model.generate_content(prompt)
         response_text = response.text.strip()
 
-        try:
-            start_index = response_text.find('{')
-            end_index = response_text.rfind('}') + 1
-            if start_index != -1 and end_index != -1:
-                json_string = response_text[start_index:end_index]
-            else:
-                raise ValueError("AI 응답에서 유효한 JSON 객체를 찾을 수 없습니다.")
-                
-        except Exception as e:
-            print(f"JSON 서브셋 추출 실패: {e}\n원본 응답: {response_text}")
-            raise json.JSONDecodeError("Failed to extract JSON subset", response_text, 0)
-        
-        # JSON parsing
+        # JSON 마크다운 코드 블록 제거
         if response_text.startswith("```json"):
             response_text = response_text[7:]
         if response_text.startswith("```"):
@@ -182,9 +171,22 @@ async def parse_todo(request: TodoRequest):
         
         response_text = response_text.strip()
         
+        # JSON 객체만 추출 (추가 텍스트가 있을 경우 대비)
+        try:
+            start_index = response_text.find('{')
+            end_index = response_text.rfind('}') + 1
+            if start_index != -1 and end_index > start_index:
+                json_string = response_text[start_index:end_index]
+                response_text = json_string
+        except Exception as e:
+            print(f"JSON 추출 중 경고: {e}")
+        
+        # JSON 파싱
         parsed_data = json.loads(response_text)
 
+        # TodoItem 객체 생성
         todos = [TodoItem(**todo) for todo in parsed_data.get("todos", [])]
+        
         return TodoResponse(
             original_message=request.message,
             todos=todos,
@@ -194,22 +196,53 @@ async def parse_todo(request: TodoRequest):
     # error1 jsondecode
     except json.JSONDecodeError as e:
         raise HTTPException(
-            status_code=501,
+            status_code=500,
             detail=f"AI 응답을 파싱하는 중 오류가 발생했습니다: {str(e)}\n응답: {response_text}"
         )
     # error2 http
     except Exception as e:
         raise HTTPException(
-            status_code=502,
+            status_code=500,
             detail=f"Todo 파싱 중 오류 발생: {str(e)}"
         )
 
 #============================================== SAVE DB ===============================================
 
+# DB 저장을 위한 모델 (user_id 추가)
+class TodoSaveRequest(BaseModel):
+    user_id: str
+    title: str
+    description: Optional[str] = None
+    due_date: Optional[str] = None
+    due_time: Optional[str] = None
+    location: Optional[str] = None
+    priority: Optional[str] = "medium"
+    status: bool = False
+
 @app.post('/send-Todo')
-def sendTodoList(data: TodoItem):
-    response = supabase_client.table("test").insert({"user_id": data.user_id, "title": data.title,"created_at": data.created_at, "description": data.description, "event_date": data.date, "event_time": data.time, "location": data.location, "priority": data.priority, "status": data.status}).execute()
-    return True
+async def sendTodoList(data: TodoSaveRequest, current_user = Depends(get_current_user)):
+    try:
+        # 현재 로그인한 사용자의 ID 사용
+        response = supabase_client.table("todos").insert({
+            "user_id": current_user.id,
+            "title": data.title,
+            "description": data.description,
+            "due_date": data.due_date,
+            "due_time": data.due_time,
+            "location": data.location,
+            "priority": data.priority,
+            "status": data.status
+        }).execute()
+        
+        return {
+            "success": True,
+            "data": response.data
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Todo 저장 중 오류 발생: {str(e)}"
+        )
 
 #============================================== OAUTH ===============================================
 
@@ -258,19 +291,27 @@ async def oauth_login(request: OAuthLoginRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# OAuth callback
-@app.post("/auth/callback")
+# OAuth callback - GET 메서드로 변경 및 올바른 API 사용
+@app.get("/auth/callback")
 async def auth_callback(code: str):
     try:
-        session = supabase_client.auth.exchange_code_for_session(code)
+        # Supabase auth code exchange 올바른 방법
+        response = supabase_client.auth.exchange_code_for_session({"auth_code": code})
         
         return {
-            "access_token": session.access_token,
-            "refresh_token": session.refresh_token,
-            "user": session.user
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
+            "user": {
+                "id": response.user.id,
+                "email": response.user.email,
+                "user_metadata": response.user.user_metadata
+            }
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Authentication failed: {str(e)}"
+        )
 
 # current user data
 @app.get("/auth/me")
