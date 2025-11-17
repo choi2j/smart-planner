@@ -160,3 +160,10 @@ async def parse_todo(request: TodoRequest):
             status_code=500,
             detail=f"Todo 파싱 중 오류 발생: {str(e)}"
         )
+
+# Save DB
+
+@app.post('/send-Todo')
+def sendTodoList(data: TodoItem):
+    response = supabase_client.table("test").insert({"user_id": data.user_id, "title": data.title,"created_at": data.created_at, "description": data.description, "event_date": data.date, "event_time": data.time, "location": data.location, "priority": data.priority, "status": data.status}).execute()
+    return True
