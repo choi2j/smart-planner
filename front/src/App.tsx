@@ -50,58 +50,57 @@ function App() {
 	const [isLoading, setIsLoading] = useState(true);
 
 	// Load token and user from localStorage on mount
-	useEffect(() => {
-		const loadAuthFromStorage = async () => {
-			// Check if we're coming back from OAuth callback
-			const urlParams = new URLSearchParams(window.location.search);
-			const code = urlParams.get("code");
+useEffect(() => {
+    const loadAuthFromStorage = async () => {
+        // Check if we're coming back from OAuth callback
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get("code");
 
-			if (code) {
-				// Exchange code for session
-				try {
-					const response = await fetch(`http://127.0.0.1:8000/auth/callback?code=${code}`, {
-						method: "POST",
-					});
+        if (code) {
+            // Exchange code for session
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/auth/callback?code=${code}`);
+                // ↑ method: "POST" 제거 (기본값이 GET)
 
-					if (response.ok) {
-						const data = await response.json();
-						const { access_token, user: userData } = data;
+                if (response.ok) {
+                    const data = await response.json();
+                    const { access_token, user: userData } = data;
 
-						// Store in localStorage
-						localStorage.setItem("access_token", access_token);
-						localStorage.setItem("user", JSON.stringify({ id: userData.id, email: userData.email }));
+                    // Store in localStorage
+                    localStorage.setItem("access_token", access_token);
+                    localStorage.setItem("user", JSON.stringify({ id: userData.id, email: userData.email }));
 
-						// Set state
-						setAccessToken(access_token);
-						setUser({ id: userData.id, email: userData.email });
+                    // Set state
+                    setAccessToken(access_token);
+                    setUser({ id: userData.id, email: userData.email });
 
-						// Load todos
-						await loadTodos(access_token);
+                    // Load todos
+                    await loadTodos(access_token);
 
-						// Clean up URL
-						window.history.replaceState({}, document.title, window.location.pathname);
-					}
-				} catch (error) {
-					console.error("Failed to process OAuth callback:", error);
-					alert("로그인 처리 중 오류가 발생했습니다.");
-				}
-			} else {
-				// Load from localStorage
-				const storedToken = localStorage.getItem("access_token");
-				const storedUser = localStorage.getItem("user");
+                    // Clean up URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            } catch (error) {
+                console.error("Failed to process OAuth callback:", error);
+                alert("로그인 처리 중 오류가 발생했습니다.");
+            }
+        } else {
+            // Load from localStorage
+            const storedToken = localStorage.getItem("access_token");
+            const storedUser = localStorage.getItem("user");
 
-				if (storedToken && storedUser) {
-					setAccessToken(storedToken);
-					setUser(JSON.parse(storedUser));
-					await loadTodos(storedToken);
-				}
-			}
+            if (storedToken && storedUser) {
+                setAccessToken(storedToken);
+                setUser(JSON.parse(storedUser));
+                await loadTodos(storedToken);
+            }
+        }
 
-			setIsLoading(false);
-		};
+        setIsLoading(false);
+    };
 
-		loadAuthFromStorage();
-	}, []);
+    loadAuthFromStorage();
+}, []);
 
 	// Auto-save todos when save state changes (debounced)
 	useEffect(() => {
