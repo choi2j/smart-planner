@@ -1,6 +1,3 @@
-from supabase import create_client, Client
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -8,8 +5,24 @@ import google.generativeai as genai
 import os
 import json
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
+from supabase import create_client, Client
+from pydantic_settings import BaseSettings
 
 load_dotenv()
+
+class Settings(BaseSettings):
+    frontend_url: str
+    supabase_url: str
+    supabase_anon_key: str
+    gemini_api_key: str
+    
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
 
 # reset
 app = FastAPI(
@@ -17,16 +30,17 @@ app = FastAPI(
     description="SMART-PLANNER-API 백엔드",
     version="1.0.0"
 )
+security = HTTPBearer()
 
 # gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCCnfrRNMsL0eHrxpXTpdw34I2oWjx-ua4")
-genai.configure(api_key=GEMINI_API_KEY)
-
+genai.configure(api_key=settings.gemini_api_key)
 model = genai.GenerativeModel("gemini-2.0-flash")
 
 # db
-supabase_client: Client = create_client("https://hbypjezxxkevgbzkhjgj.supabase.co/",
-                                        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhieXBqZXp4eGtldmdiemtoamdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzMjQzNTQsImV4cCI6MjA3ODkwMDM1NH0.933VwKz3oMEqppYQXN9n8fA58iV2aBpIA8RUGQTSwM0")
+supabase_client: Client = create_client(
+    settings.supabase_url,
+    settings.supabase_anon_key
+)
 
 # CORS
 app.add_middleware(
@@ -146,25 +160,15 @@ async def parse_todo(request: TodoRequest):
         response = model.generate_content(prompt)
         response_text = response.text.strip()
 
-        # --- 여기부터 수정 ---
-
-        # 1. AI 응답에서 JSON 부분만 정확히 추출합니다.
         try:
-            # 가장 처음 여는 중괄호({)의 위치를 찾습니다.
             start_index = response_text.find('{')
-            # 가장 마지막 닫는 중괄호(})의 위치를 찾습니다.
             end_index = response_text.rfind('}') + 1
-            
-            # 중괄호를 찾은 경우에만 해당 부분을 잘라냅니다.
             if start_index != -1 and end_index != -1:
                 json_string = response_text[start_index:end_index]
             else:
-                # AI 응답에 JSON이 아예 없는 경우
                 raise ValueError("AI 응답에서 유효한 JSON 객체를 찾을 수 없습니다.")
                 
         except Exception as e:
-            # 추출 실패 시 오류를 발생시켜 JSONDecodeError로 잡히도록 합니다.
-            # 이 로그는 서버 터미널에만 보입니다.
             print(f"JSON 서브셋 추출 실패: {e}\n원본 응답: {response_text}")
             raise json.JSONDecodeError("Failed to extract JSON subset", response_text, 0)
         
@@ -189,10 +193,8 @@ async def parse_todo(request: TodoRequest):
         
     # error1 jsondecode
     except json.JSONDecodeError as e:
-        # 추출이 실패했거나, 추출된 내용이 여전히 유효한 JSON이 아닌 경우
         raise HTTPException(
             status_code=501,
-            # 'json_string'이 정의되었을 수도 있으니 원본 응답(response_text)을 로깅
             detail=f"AI 응답을 파싱하는 중 오류가 발생했습니다: {str(e)}\n응답: {response_text}"
         )
     # error2 http
@@ -202,9 +204,116 @@ async def parse_todo(request: TodoRequest):
             detail=f"Todo 파싱 중 오류 발생: {str(e)}"
         )
 
-# Save DB
+#============================================== SAVE DB ===============================================
 
 @app.post('/send-Todo')
 def sendTodoList(data: TodoItem):
     response = supabase_client.table("test").insert({"user_id": data.user_id, "title": data.title,"created_at": data.created_at, "description": data.description, "event_date": data.date, "event_time": data.time, "location": data.location, "priority": data.priority, "status": data.status}).execute()
     return True
+
+#============================================== OAUTH ===============================================
+
+class OAuthLoginRequest(BaseModel):
+    provider: str  # 'google', 'github', 'kakao' etc.
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        token = credentials.credentials
+        
+        # Supabase에서 사용자 정보 가져오기
+        response = supabase_client.auth.get_user(token)
+        
+        if not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return response.user
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+# login
+@app.post("/auth/oauth/login")
+async def oauth_login(request: OAuthLoginRequest):
+    try:
+        data = supabase_client.auth.sign_in_with_oauth({
+            "provider": request.provider,
+            "options": {
+                "redirect_to": f"{settings.frontend_url}/auth/callback"
+            }
+        })
+        return {"url": data.url}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# OAuth callback
+@app.post("/auth/callback")
+async def auth_callback(code: str):
+    """OAuth 콜백 처리"""
+    try:
+        session = supabase_client.auth.exchange_code_for_session(code)
+        
+        return {
+            "access_token": session.access_token,
+            "refresh_token": session.refresh_token,
+            "user": session.user
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# current user data
+@app.get("/auth/me")
+async def get_me(current_user = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "user_metadata": current_user.user_metadata,
+        "created_at": current_user.created_at
+    }
+
+# refresh access token
+@app.post("/auth/refresh")
+async def refresh_token(request: RefreshTokenRequest):
+    try:
+        response = supabase_client.auth.refresh_session(request.refresh_token)
+        
+        if not response.session:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid refresh token"
+            )
+        
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
+            "expires_in": response.session.expires_in
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Token refresh failed: {str(e)}"
+        )
+
+# logout
+@app.post("/auth/logout")
+async def logout(current_user = Depends(get_current_user)):
+    try:
+        supabase_client.auth.sign_out()
+        return {"message": "Successfully logged out"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
