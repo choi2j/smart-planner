@@ -113,7 +113,6 @@ async def oauth_login(request: OAuthLoginRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 # OAuth 콜백 처리
-<<<<<<< HEAD
 @app.get("/auth/callback")
 async def auth_callback(code: str):
     """OAuth 콜백 처리"""
@@ -127,16 +126,6 @@ async def auth_callback(code: str):
                 detail="Failed to exchange code for session"
             )
 
-=======
-@app.get("/auth/callback")  # GET으로 변경
-async def auth_callback(code: str):
-    """OAuth 콜백 처리"""
-    try:
-        response = supabase_client.auth.exchange_code_for_session({
-            "auth_code": code
-        })
-        
->>>>>>> 2341bad08cb9e9740a0f0c521aaeaf4b60098f8e
         return {
             "access_token": response.session.access_token,
             "refresh_token": response.session.refresh_token,
@@ -150,16 +139,12 @@ async def auth_callback(code: str):
         raise
     except Exception as e:
         print(f"OAuth 콜백 에러: {str(e)}")
-<<<<<<< HEAD
         import traceback
         traceback.print_exc()
         raise HTTPException(
             status_code=400,
             detail=f"OAuth callback failed: {str(e)}"
         )
-=======
-        raise HTTPException(status_code=400, detail=str(e))
->>>>>>> 2341bad08cb9e9740a0f0c521aaeaf4b60098f8e
 
 # 현재 사용자 정보
 @app.get("/auth/me")
