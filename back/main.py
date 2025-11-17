@@ -129,7 +129,7 @@ async def parse_todo(request: TodoRequest):
         response = model.generate_content(prompt)
         response_text = response.text.strip()
         
-        # JSON 파싱 (마크다운 코드 블록 제거)
+        # JSON parsing
         if response_text.startswith("```json"):
             response_text = response_text[7:]
         if response_text.startswith("```"):
