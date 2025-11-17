@@ -204,12 +204,97 @@ async def parse_todo(request: TodoRequest):
             detail=f"Todo 파싱 중 오류 발생: {str(e)}"
         )
 
+#============================================== OAUTH HELPER ===============================================
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    try:
+        token = credentials.credentials
+
+        # Supabase에서 사용자 정보 가져오기
+        response = supabase_client.auth.get_user(token)
+
+        if not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        return response.user
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
 #============================================== SAVE DB ===============================================
 
-@app.post('/send-Todo')
-def sendTodoList(data: TodoItem):
-    response = supabase_client.table("test").insert({"user_id": data.user_id, "title": data.title,"created_at": data.created_at, "description": data.description, "event_date": data.date, "event_time": data.time, "location": data.location, "priority": data.priority, "status": data.status}).execute()
-    return True
+class SaveTodoRequest(BaseModel):
+    todos: List[TodoItem]
+
+@app.post('/todos/save')
+async def save_todos(request: SaveTodoRequest, current_user = Depends(get_current_user)):
+    """Save all user's todos to database"""
+    try:
+        user_id = current_user.id
+
+        # Delete existing todos for this user
+        supabase_client.table("todos").delete().eq("user_id", user_id).execute()
+
+        # Insert new todos
+        todos_data = []
+        for todo in request.todos:
+            todos_data.append({
+                "user_id": user_id,
+                "title": todo.title,
+                "description": todo.description,
+                "due_date": todo.due_date,
+                "due_time": todo.due_time,
+                "location": todo.location,
+                "priority": todo.priority,
+                "status": todo.status
+            })
+
+        if todos_data:
+            response = supabase_client.table("todos").insert(todos_data).execute()
+
+        return {"message": "Todos saved successfully", "count": len(todos_data)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save todos: {str(e)}"
+        )
+
+@app.get('/todos/load', response_model=List[TodoItem])
+async def load_todos(current_user = Depends(get_current_user)):
+    """Load all user's todos from database"""
+    try:
+        user_id = current_user.id
+
+        response = supabase_client.table("todos").select("*").eq("user_id", user_id).execute()
+
+        todos = []
+        for item in response.data:
+            todos.append(TodoItem(
+                title=item["title"],
+                description=item["description"],
+                due_date=item["due_date"],
+                due_time=item["due_time"],
+                location=item["location"],
+                priority=item["priority"],
+                status=item["status"]
+            ))
+
+        return todos
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load todos: {str(e)}"
+        )
 
 #============================================== OAUTH ===============================================
 
@@ -218,31 +303,6 @@ class OAuthLoginRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    try:
-        token = credentials.credentials
-        
-        # Supabase에서 사용자 정보 가져오기
-        response = supabase_client.auth.get_user(token)
-        
-        if not response.user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        return response.user
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
 # login
 @app.post("/auth/oauth/login")
