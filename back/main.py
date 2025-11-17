@@ -74,6 +74,7 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         "description": "할 일에 대한 상세 설명",
         "due_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만 없을경우 null)",
         "due_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만 없을경우 null)",
+        "location": "해당 행동이 행해져야하는 위치",
         "priority": "low/medium/high 중 하나",
         "status": false
         }}
@@ -87,6 +88,7 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
 4. description은 원래 메시지의 맥락을 포함하여 작성하세요.
 5. 카테고리는 내용을 보고 적절히 분류하세요.
 6. 반드시 유효한 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
+7. 특정한 위치나 행동의 주체가 실행되어야하는 곳이 문장에 포함되어있을경우 location에 저장하세요
 
 예시:
 사용자: "내일까지 10시까지 회사보고서 작성하고, 장 봐야 해. 우유랑 계란 사야 함"
