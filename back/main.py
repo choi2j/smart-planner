@@ -93,26 +93,39 @@ class RefreshTokenRequest(BaseModel):
 async def oauth_login(request: OAuthLoginRequest):
     """OAuth 로그인 URL 생성"""
     try:
+        print(f"🔑 OAuth login request for provider: {request.provider}")
+        print(f"🏠 Redirect URL: {settings.frontend_url}")
+
         data = supabase_client.auth.sign_in_with_oauth({
             "provider": request.provider,
             "options": {
-                "redirect_to": f"{settings.frontend_url}/auth/callback"
+                "redirect_to": settings.frontend_url,
+                "skip_browser_redirect": True  # We handle redirect in frontend
             }
         })
+
+        print(f"🔗 OAuth URL generated: {data.url}")
         return {"url": data.url}
     except Exception as e:
+        print(f"❌ OAuth login error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
 
 # OAuth 콜백 처리
-@app.get("/auth/callback")  # ← GET으로 변경
+@app.get("/auth/callback")
 async def auth_callback(code: str):
     """OAuth 콜백 처리"""
     try:
-        # 올바른 방법: 딕셔너리로 전달
-        response = supabase_client.auth.exchange_code_for_session({
-            "auth_code": code
-        })
-        
+        # Supabase 코드 교환
+        response = supabase_client.auth.exchange_code_for_session(code)
+
+        if not response or not response.session:
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to exchange code for session"
+            )
+
         return {
             "access_token": response.session.access_token,
             "refresh_token": response.session.refresh_token,
@@ -122,9 +135,16 @@ async def auth_callback(code: str):
                 "user_metadata": response.user.user_metadata
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"OAuth 콜백 에러: {str(e)}")  # 디버깅용 로그 추가
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"OAuth 콜백 에러: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=400,
+            detail=f"OAuth callback failed: {str(e)}"
+        )
 
 # 현재 사용자 정보
 @app.get("/auth/me")
@@ -361,6 +381,71 @@ async def sendTodoList(data: TodoItem, current_user = Depends(get_current_user))
         raise HTTPException(
             status_code=500,
             detail=f"Todo 저장 중 오류 발생: {str(e)}"
+        )
+
+# ==================== Todos Save/Load ====================
+
+class SaveTodoRequest(BaseModel):
+    todos: List[TodoItem]
+
+@app.post('/todos/save')
+async def save_todos(request: SaveTodoRequest, current_user = Depends(get_current_user)):
+    """사용자의 모든 할 일을 데이터베이스에 저장"""
+    try:
+        user_id = current_user.id
+
+        # 기존 todos 삭제
+        supabase_client.table("todos").delete().eq("user_id", user_id).execute()
+
+        # 새로운 todos 삽입
+        todos_data = []
+        for todo in request.todos:
+            todos_data.append({
+                "user_id": user_id,
+                "title": todo.title,
+                "description": todo.description,
+                "due_date": todo.due_date,
+                "due_time": todo.due_time,
+                "location": todo.location,
+                "priority": todo.priority,
+                "status": todo.status
+            })
+
+        if todos_data:
+            supabase_client.table("todos").insert(todos_data).execute()
+
+        return {"message": "Todos saved successfully", "count": len(todos_data)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save todos: {str(e)}"
+        )
+
+@app.get('/todos/load', response_model=List[TodoItem])
+async def load_todos(current_user = Depends(get_current_user)):
+    """사용자의 모든 할 일을 데이터베이스에서 로드"""
+    try:
+        user_id = current_user.id
+
+        response = supabase_client.table("todos").select("*").eq("user_id", user_id).execute()
+
+        todos = []
+        for item in response.data:
+            todos.append(TodoItem(
+                title=item["title"],
+                description=item["description"],
+                due_date=item["due_date"],
+                due_time=item["due_time"],
+                location=item["location"],
+                priority=item["priority"],
+                status=item["status"]
+            ))
+
+        return todos
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load todos: {str(e)}"
         )
 
 if __name__ == "__main__":
