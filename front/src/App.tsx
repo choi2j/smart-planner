@@ -52,43 +52,152 @@ function App() {
 	// Load token and user from localStorage on mount
 	useEffect(() => {
 		const loadAuthFromStorage = async () => {
-			// Check if we're coming back from OAuth callback
-			const urlParams = new URLSearchParams(window.location.search);
-			const code = urlParams.get("code");
+			console.log("🔍 Checking for auth...");
+			console.log("Current URL:", window.location.href);
+			console.log("Full Hash:", window.location.hash);
 
-			if (code) {
-				// Exchange code for session
+			// Check for authorization code in query params (Supabase authorization code flow)
+			const urlParams = new URLSearchParams(window.location.search);
+			const authCode = urlParams.get("code");
+
+			// Check for Supabase OAuth callback (hash fragment - implicit flow)
+			const hashParams = new URLSearchParams(window.location.hash.substring(1));
+			const accessTokenFromHash = hashParams.get("access_token");
+			const refreshToken = hashParams.get("refresh_token");
+			const errorParam = hashParams.get("error") || urlParams.get("error");
+			const errorDescription = hashParams.get("error_description") || urlParams.get("error_description");
+
+			console.log("📝 OAuth Parameters:");
+			console.log("- Authorization Code:", authCode ? "✓ Found" : "✗ Not found");
+			console.log("- Access Token (hash):", accessTokenFromHash ? "✓ Found" : "✗ Not found");
+			console.log("- Refresh Token:", refreshToken ? "✓ Found" : "✗ Not found");
+			console.log("- Error:", errorParam || "None");
+
+			if (errorParam) {
+				console.error("OAuth Error:", errorParam, errorDescription);
+				alert(`로그인 오류: ${errorDescription || errorParam}`);
+				window.history.replaceState({}, document.title, window.location.pathname);
+				setIsLoading(false);
+				return;
+			}
+
+			// Handle authorization code flow
+			if (authCode) {
+				console.log("✅ Found authorization code! Exchanging for tokens...");
+				console.log("Code preview:", authCode.substring(0, 20) + "...");
+
 				try {
-					const response = await fetch(`http://127.0.0.1:8000/auth/callback?code=${code}`, {
-						method: "POST",
-					});
+					console.log("🔄 Calling backend to exchange code for session...");
+					const response = await fetch(`http://127.0.0.1:8000/auth/callback?code=${authCode}`);
+
+					console.log("📡 Backend response status:", response.status);
 
 					if (response.ok) {
 						const data = await response.json();
-						const { access_token, user: userData } = data;
+						console.log("👤 Received tokens and user data");
 
-						// Store in localStorage
-						localStorage.setItem("access_token", access_token);
-						localStorage.setItem("user", JSON.stringify({ id: userData.id, email: userData.email }));
+						// Store tokens
+						console.log("💾 Storing auth data in localStorage...");
+						localStorage.setItem("access_token", data.access_token);
+						localStorage.setItem("refresh_token", data.refresh_token);
+						localStorage.setItem("user", JSON.stringify({ id: data.user.id, email: data.user.email }));
 
 						// Set state
-						setAccessToken(access_token);
-						setUser({ id: userData.id, email: userData.email });
+						console.log("🔄 Updating React state...");
+						setAccessToken(data.access_token);
+						setUser({ id: data.user.id, email: data.user.email });
 
 						// Load todos
-						await loadTodos(access_token);
+						console.log("📋 Loading user todos...");
+						await loadTodos(data.access_token);
 
 						// Clean up URL
+						console.log("🧹 Cleaning up URL...");
+						window.history.replaceState({}, document.title, window.location.pathname);
+
+						console.log("✅ Login complete!");
+						alert("로그인 성공!");
+					} else {
+						const errorText = await response.text();
+						console.error("❌ Failed to exchange code. Status:", response.status);
+						console.error("❌ Error response:", errorText);
+						alert("코드 교환 실패. 콘솔을 확인하세요.");
 						window.history.replaceState({}, document.title, window.location.pathname);
 					}
 				} catch (error) {
-					console.error("Failed to process OAuth callback:", error);
-					alert("로그인 처리 중 오류가 발생했습니다.");
+					console.error("❌ Failed to process authorization code:", error);
+					alert("로그인 처리 중 오류가 발생했습니다. 콘솔을 확인하세요.");
+					window.history.replaceState({}, document.title, window.location.pathname);
+				}
+
+				setIsLoading(false);
+				return;
+			}
+
+			// Handle implicit flow (if tokens are in hash)
+			if (accessTokenFromHash) {
+				console.log("✅ Found access token in URL hash!");
+				console.log("Token preview:", accessTokenFromHash.substring(0, 20) + "...");
+
+				// OAuth callback with access token in hash
+				try {
+					// Get user info using the access token
+					console.log("🌐 Fetching user info from backend...");
+					const userResponse = await fetch("http://127.0.0.1:8000/auth/me", {
+						headers: {
+							Authorization: `Bearer ${accessTokenFromHash}`,
+						},
+					});
+
+					console.log("📡 User response status:", userResponse.status);
+
+					if (userResponse.ok) {
+						const userData = await userResponse.json();
+						console.log("👤 User data received:", userData);
+
+						// Store in localStorage
+						console.log("💾 Storing auth data in localStorage...");
+						localStorage.setItem("access_token", accessTokenFromHash);
+						if (refreshToken) {
+							localStorage.setItem("refresh_token", refreshToken);
+						}
+						localStorage.setItem("user", JSON.stringify({ id: userData.id, email: userData.email }));
+
+						// Set state
+						console.log("🔄 Updating React state...");
+						setAccessToken(accessTokenFromHash);
+						setUser({ id: userData.id, email: userData.email });
+
+						// Load todos
+						console.log("📋 Loading user todos...");
+						await loadTodos(accessTokenFromHash);
+
+						// Clean up URL hash
+						console.log("🧹 Cleaning up URL...");
+						window.history.replaceState({}, document.title, window.location.pathname);
+
+						console.log("✅ Login complete!");
+						alert("로그인 성공!");
+					} else {
+						const errorText = await userResponse.text();
+						console.error("❌ Failed to get user info. Status:", userResponse.status);
+						console.error("❌ Error response:", errorText);
+						throw new Error("Failed to get user info");
+					}
+				} catch (error) {
+					console.error("❌ Failed to process OAuth callback:", error);
+					alert("로그인 처리 중 오류가 발생했습니다. 콘솔을 확인하세요.");
+					// Clean up URL even on error
+					window.history.replaceState({}, document.title, window.location.pathname);
 				}
 			} else {
+				console.log("No token in URL, checking localStorage...");
 				// Load from localStorage
 				const storedToken = localStorage.getItem("access_token");
 				const storedUser = localStorage.getItem("user");
+
+				console.log("Stored token:", storedToken ? "Found" : "Not found");
+				console.log("Stored user:", storedUser ? "Found" : "Not found");
 
 				if (storedToken && storedUser) {
 					setAccessToken(storedToken);
@@ -116,6 +225,7 @@ function App() {
 
 	const handleLogin = async (provider: string) => {
 		try {
+			console.log("🔑 Starting OAuth login with provider:", provider);
 			const response = await fetch("http://127.0.0.1:8000/auth/oauth/login", {
 				method: "POST",
 				headers: {
@@ -125,11 +235,17 @@ function App() {
 			});
 
 			const data = await response.json();
+			console.log("🔗 OAuth URL received:", data.url);
+
 			if (data.url) {
+				console.log("🚀 Redirecting to OAuth provider...");
 				window.location.href = data.url;
+			} else {
+				console.error("❌ No OAuth URL received from backend");
+				alert("로그인 URL을 받지 못했습니다.");
 			}
 		} catch (error) {
-			console.error("Login failed:", error);
+			console.error("❌ Login failed:", error);
 			alert("로그인 실패!");
 		}
 	};
@@ -345,11 +461,19 @@ function App() {
 	};
 
 	if (isLoading) {
+		// Check if we're processing OAuth callback
+		const hasHashParams = window.location.hash.includes("access_token");
+
 		return (
 			<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
 				<div className="text-center">
-					<div className="text-6xl mb-4">⏳</div>
-					<p className="text-gray-600 text-lg">로딩 중...</p>
+					<div className="text-6xl mb-4">{hasHashParams ? "🔐" : "⏳"}</div>
+					<p className="text-gray-600 text-lg">
+						{hasHashParams ? "로그인 처리 중..." : "로딩 중..."}
+					</p>
+					<p className="text-gray-400 text-sm mt-2">
+						{hasHashParams && "잠시만 기다려주세요"}
+					</p>
 				</div>
 			</div>
 		);
@@ -397,6 +521,19 @@ function App() {
 			<div className="container mx-auto px-4 py-8 max-w-4xl">
 				{/* Header */}
 				<div className="text-center mb-8">
+					{/* URL Warning */}
+					{window.location.hostname === "127.0.0.1" && (
+						<div className="mb-4 p-3 bg-yellow-100 border-2 border-yellow-400 rounded-lg">
+							<p className="text-sm text-yellow-800 font-medium">
+								⚠️ 로그인이 작동하지 않으면{" "}
+								<a href="http://localhost:5173" className="underline font-bold">
+									localhost:5173
+								</a>
+								을 사용하세요
+							</p>
+						</div>
+					)}
+
 					<div className="flex items-center justify-between mb-4">
 						<div className="flex-1"></div>
 						<h1 className="text-4xl font-bold text-gray-800">Smart Planner</h1>
