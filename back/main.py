@@ -17,7 +17,7 @@ app = FastAPI(
 )
 
 # gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "your-api-key-here")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCCnfrRNMsL0eHrxpXTpdw34I2oWjx-ua4")
 genai.configure(api_key=GEMINI_API_KEY)
 
 model = genai.GenerativeModel('gemini-pro')
