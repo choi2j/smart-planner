@@ -18,17 +18,6 @@ interface ApiResponse {
 
 function App() {
 	const [inputValue, setInputValue] = useState("");
-	const [plans, setPlans] = useState<Plan[]>([
-		{
-			title: "",
-			description: "",
-			event_date: "",
-			event_time: "",
-			location: "",
-			priority: "",
-			status: false,
-		},
-	]);
 	const [save, setSave] = useState<Plan[]>([]);
 	const [sortOrder, setSortOrder] = useState<"date-asc" | "date-desc" | "priority" | "none">("none");
 	const [calendarSortOrder, setCalendarSortOrder] = useState<"priority" | "time" | "none">("none");
