@@ -54,7 +54,7 @@ function App() {
 	// Load token and user from localStorage on mount
 	useEffect(() => {
 		const loadAuthFromStorage = async () => {
-			console.log("🔍 Checking for auth...");
+			console.log("Checking for auth...");
 			console.log("Current URL:", window.location.href);
 
 			// Check for authorization code in query params (OAuth callback)
@@ -77,49 +77,49 @@ function App() {
 
 			// Handle authorization code flow
 			if (authCode) {
-				console.log("✅ Found authorization code! Exchanging for tokens...");
+				console.log("Found authorization code! Exchanging for tokens...");
 				console.log("Code preview:", authCode.substring(0, 20) + "...");
 
 				try {
-					console.log("🔄 Calling backend to exchange code for session...");
+					console.log("Calling backend to exchange code for session...");
 					const response = await fetch(`http://127.0.0.1:8000/auth/callback?code=${authCode}`);
 
-					console.log("📡 Backend response status:", response.status);
+					console.log("Backend response status:", response.status);
 
 					if (response.ok) {
 						const data = await response.json();
-						console.log("👤 Received tokens and user data");
+						console.log("Received tokens and user data");
 
 						// Store tokens
-						console.log("💾 Storing auth data in localStorage...");
+						console.log("Storing auth data in localStorage...");
 						localStorage.setItem("access_token", data.access_token);
 						localStorage.setItem("refresh_token", data.refresh_token);
 						localStorage.setItem("user", JSON.stringify({ id: data.user.id, email: data.user.email }));
 
 						// Set state
-						console.log("🔄 Updating React state...");
+						console.log("Updating React state...");
 						setAccessToken(data.access_token);
 						setUser({ id: data.user.id, email: data.user.email });
 
 						// Load todos
-						console.log("📋 Loading user todos...");
+						console.log("Loading user todos...");
 						await loadTodos(data.access_token);
 
 						// Clean up URL
-						console.log("🧹 Cleaning up URL...");
+						console.log("Cleaning up URL...");
 						window.history.replaceState({}, document.title, window.location.pathname);
 
-						console.log("✅ Login complete!");
+						console.log("Login complete!");
 						alert("로그인 성공!");
 					} else {
 						const errorText = await response.text();
-						console.error("❌ Failed to exchange code. Status:", response.status);
-						console.error("❌ Error response:", errorText);
+						console.error("Failed to exchange code. Status:", response.status);
+						console.error("Error response:", errorText);
 						alert("코드 교환 실패. 콘솔을 확인하세요.");
 						window.history.replaceState({}, document.title, window.location.pathname);
 					}
 				} catch (error) {
-					console.error("❌ Failed to process authorization code:", error);
+					console.error("Failed to process authorization code:", error);
 					alert("로그인 처리 중 오류가 발생했습니다. 콘솔을 확인하세요.");
 					window.history.replaceState({}, document.title, window.location.pathname);
 				}
@@ -161,7 +161,7 @@ function App() {
 
 	const handleLogin = async (provider: string) => {
 		try {
-			console.log("🔑 Starting OAuth login with provider:", provider);
+			console.log("Starting OAuth login with provider:", provider);
 			const response = await fetch("http://127.0.0.1:8000/auth/oauth/login", {
 				method: "POST",
 				headers: {
@@ -171,17 +171,17 @@ function App() {
 			});
 
 			const data = await response.json();
-			console.log("🔗 OAuth URL received:", data.url);
+			console.log("OAuth URL received:", data.url);
 
 			if (data.url) {
-				console.log("🚀 Redirecting to OAuth provider...");
+				console.log("Redirecting to OAuth provider...");
 				window.location.href = data.url;
 			} else {
-				console.error("❌ No OAuth URL received from backend");
+				console.error("No OAuth URL received from backend");
 				alert("로그인 URL을 받지 못했습니다.");
 			}
 		} catch (error) {
-			console.error("❌ Login failed:", error);
+			console.error("Login failed:", error);
 			alert("로그인 실패!");
 		}
 	};
@@ -528,9 +528,8 @@ function App() {
 		const hasCode = window.location.search.includes("code=");
 
 		return (
-			<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
 				<div className="text-center">
-					<div className="text-6xl mb-4">{hasCode ? "🔐" : "⏳"}</div>
 					<p className="text-gray-600 text-lg">
 						{hasCode ? "로그인 처리 중..." : "로딩 중..."}
 					</p>
@@ -543,11 +542,11 @@ function App() {
 	}
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+		<div className="min-h-screen bg-gray-50">
 			{/* Login Modal */}
 			{showLoginModal && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-					<div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+					<div className="bg-white border-2 border-gray-300 p-8 max-w-md w-full mx-4">
 						<div className="text-center mb-6">
 							<h2 className="text-3xl font-bold text-gray-800 mb-2">로그인</h2>
 							<p className="text-gray-600">소셜 계정으로 간편하게 로그인하세요</p>
@@ -556,24 +555,22 @@ function App() {
 						<div className="space-y-3">
 							<button
 								onClick={() => handleLogin("google")}
-								className="w-full px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all flex items-center justify-center gap-3"
+								className="w-full px-6 py-3 bg-white border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-all flex items-center justify-center gap-3"
 							>
-								<span className="text-2xl">🔍</span>
 								Google로 로그인
 							</button>
 
 							<button
 								onClick={() => handleLogin("github")}
-								className="w-full px-6 py-3 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-600 transition-all flex items-center justify-center gap-3"
+								className="w-full px-6 py-3 bg-gray-800 border-2 border-gray-800 text-white font-semibold hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-600 transition-all flex items-center justify-center gap-3"
 							>
-								<span className="text-2xl">🐙</span>
 								GitHub로 로그인
 							</button>
 						</div>
 
 						<button
 							onClick={() => setShowLoginModal(false)}
-							className="mt-6 w-full px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-all"
+							className="mt-6 w-full px-6 py-3 bg-gray-200 border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-all"
 						>
 							취소
 						</button>
@@ -585,9 +582,9 @@ function App() {
 				{/* Header */}
 				<div className="mb-8">
 					{window.location.hostname === "127.0.0.1" && (
-						<div className="mb-4 p-3 bg-yellow-100 border-2 border-yellow-400 rounded-lg">
+						<div className="mb-4 p-3 bg-yellow-100 border-2 border-yellow-400">
 							<p className="text-sm text-yellow-800 font-medium">
-								⚠️ 로그인이 작동하지 않으면{" "}
+								로그인이 작동하지 않으면{" "}
 								<a href="http://localhost:5173" className="underline font-bold">
 									localhost:5173
 								</a>
@@ -615,7 +612,7 @@ function App() {
 							) : (
 								<button
 									onClick={() => setShowLoginModal(true)}
-									className="px-4 py-2 bg-indigo-500 text-white font-semibold rounded-lg hover:bg-indigo-600 transition-all"
+									className="px-4 py-2 bg-indigo-500 border-2 border-indigo-500 text-white font-semibold hover:bg-indigo-600 transition-all"
 								>
 									로그인
 								</button>
@@ -660,7 +657,7 @@ function App() {
 						<div className="flex items-center gap-3">
 							{save.length > 0 && (
 								<>
-									<div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
+									<div className="flex items-center gap-2 bg-white px-3 py-1.5 border-2 border-gray-300">
 										<label className="text-sm text-gray-600 font-medium">정렬:</label>
 										<select
 											value={sortOrder}
@@ -673,7 +670,7 @@ function App() {
 											<option value="priority">우선순위</option>
 										</select>
 									</div>
-									<span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">
+									<span className="px-3 py-1 border-2 border-indigo-700 text-indigo-700 text-sm font-medium">
 										{save.length}개
 									</span>
 								</>
@@ -683,7 +680,6 @@ function App() {
 
 					{save.length === 0 ? (
 						<div className="text-center py-12">
-							<div className="text-6xl mb-4">📝</div>
 							<p className="text-gray-500 text-lg">
 								아직 할 일이 없습니다. 위에 입력해보세요!
 							</p>
@@ -693,7 +689,7 @@ function App() {
 							{getSortedPlans().map((plan, index) => (
 								<div
 									key={index}
-									className={`border-2 border-gray-100 rounded-xl p-5 hover:shadow-md transition-all hover:border-indigo-200 bg-gradient-to-r from-white to-gray-50 ${
+									className={`border-2 border-gray-300 p-5 transition-all hover:border-indigo-500 bg-white ${
 										plan.status ? "opacity-60" : ""
 									}`}
 								>
@@ -707,7 +703,7 @@ function App() {
 														type="text"
 														value={editValues?.title || ""}
 														onChange={(e) => handleEditChange("title", e.target.value)}
-														className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+														className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500"
 													/>
 												</div>
 												<div>
@@ -715,7 +711,7 @@ function App() {
 													<textarea
 														value={editValues?.description || ""}
 														onChange={(e) => handleEditChange("description", e.target.value)}
-														className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+														className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500"
 														rows={2}
 													/>
 												</div>
@@ -727,7 +723,7 @@ function App() {
 															value={editValues?.due_date || ""}
 															onChange={(e) => handleEditChange("due_date", e.target.value)}
 															placeholder="YYYY-MM-DD"
-															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+															className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500"
 														/>
 													</div>
 													<div>
@@ -737,7 +733,7 @@ function App() {
 															value={editValues?.due_time || ""}
 															onChange={(e) => handleEditChange("due_time", e.target.value)}
 															placeholder="HH:MM"
-															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+															className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500"
 														/>
 													</div>
 												</div>
@@ -748,7 +744,7 @@ function App() {
 															type="text"
 															value={editValues?.location || ""}
 															onChange={(e) => handleEditChange("location", e.target.value)}
-															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+															className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500"
 														/>
 													</div>
 													<div>
@@ -756,7 +752,7 @@ function App() {
 														<select
 															value={editValues?.priority || ""}
 															onChange={(e) => handleEditChange("priority", e.target.value)}
-															className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+															className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500"
 														>
 															<option value="">선택</option>
 															<option value="높음">높음</option>
@@ -769,13 +765,13 @@ function App() {
 											<div className="flex gap-2 justify-end">
 												<button
 													onClick={handleCancelEdit}
-													className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+													className="px-4 py-2 bg-gray-200 border-2 border-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
 												>
 													취소
 												</button>
 												<button
 													onClick={() => handleSaveEdit(index)}
-													className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+													className="px-4 py-2 bg-indigo-500 border-2 border-indigo-500 text-white hover:bg-indigo-600 transition-colors"
 												>
 													저장
 												</button>
@@ -799,7 +795,7 @@ function App() {
 														<div className="flex items-center gap-2">
 															{plan.priority && (
 																<span
-																	className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(
+																	className={`px-3 py-1 text-sm font-semibold border-2 ${getPriorityColor(
 																		plan.priority
 																	)}`}
 																>
@@ -808,13 +804,13 @@ function App() {
 															)}
 															<button
 																onClick={() => handleStartEdit(index)}
-																className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+																className="px-3 py-1 text-sm border-2 border-blue-700 text-blue-700 hover:bg-blue-50 transition-colors"
 															>
 																수정
 															</button>
 															<button
 																onClick={() => handleRemove(index)}
-																className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+																className="px-3 py-1 text-sm border-2 border-red-700 text-red-700 hover:bg-red-50 transition-colors"
 															>
 																삭제
 															</button>
@@ -828,21 +824,18 @@ function App() {
 													)}
 
 													<div className="flex flex-wrap gap-4 text-sm">
-														<div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-															<span className="text-lg">📅</span>
+														<div className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-blue-700">
 															<span className="font-medium text-blue-700">
-																{plan.due_date ? formatDate(plan.due_date) : "미정"}
+																날짜: {plan.due_date ? formatDate(plan.due_date) : "미정"}
 															</span>
 														</div>
-														<div className="flex items-center gap-1.5 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-100">
-															<span className="text-lg">⏰</span>
+														<div className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-purple-700">
 															<span className="font-medium text-purple-700">
-																{plan.due_time ? formatTime(plan.due_time) : "미정"}
+																시간: {plan.due_time ? formatTime(plan.due_time) : "미정"}
 															</span>
 														</div>
-														<div className="flex items-center gap-1.5 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">
-															<span className="text-lg">📍</span>
-															<span className="font-medium text-green-700">{plan.location || "미정"}</span>
+														<div className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-green-700">
+															<span className="font-medium text-green-700">장소: {plan.location || "미정"}</span>
 														</div>
 													</div>
 												</div>
@@ -932,7 +925,7 @@ function App() {
 										{getSortedCalendarTodos(getTodosByDate(selectedDate)).map((todo, index) => (
 											<div
 												key={index}
-												className={`border-2 border-gray-300 p-3 ${
+												className={`border-2 border-gray-300 p-3 bg-white ${
 													todo.status ? 'opacity-50' : ''
 												}`}
 											>
@@ -957,17 +950,17 @@ function App() {
 														)}
 														<div className="flex items-center gap-2 mt-2 text-xs">
 															{todo.due_time && (
-																<span className="px-2 py-1 border border-gray-300 text-gray-900">
+																<span className="px-2 py-1 border-2 border-gray-300 text-gray-900">
 																	{formatTime(todo.due_time)}
 																</span>
 															)}
 															{todo.location && (
-																<span className="px-2 py-1 border border-gray-300 text-gray-900">
+																<span className="px-2 py-1 border-2 border-gray-300 text-gray-900">
 																	{todo.location}
 																</span>
 															)}
 															{todo.priority && (
-																<span className={`px-2 py-1 border text-xs font-medium ${getPriorityColor(todo.priority)}`}>
+																<span className={`px-2 py-1 border-2 text-xs font-medium ${getPriorityColor(todo.priority)}`}>
 																	{todo.priority}
 																</span>
 															)}
