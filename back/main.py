@@ -329,8 +329,8 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         {{
         "title": "할 일 제목 (간결하게)",
         "description": "할 일에 대한 상세 설명",
-        "event_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만 없을경우 null)",
-        "event_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만 없을경우 null)",
+        "event_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만, 없을경우 null)",
+        "event_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만, 없을경우 null)",
         "location": "해당 행동이 행해져야하는 위치",
         "priority": "low/medium/high 중 하나",
         "status": false

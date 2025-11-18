@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Plan {
 	title: string | "미정";
 	description: string | "미정";
-	due_date: string | "미정";
-	due_time: string | "미정";
+	event_date: string | "미정";
+	event_time: string | "미정";
 	location: string | "미정";
 	priority: string | "미정";
 	status: boolean;
@@ -22,8 +22,8 @@ function App() {
 		{
 			title: "",
 			description: "",
-			due_date: "",
-			due_time: "",
+			event_date: "",
+			event_time: "",
 			location: "",
 			priority: "",
 			status: false,
@@ -41,6 +41,41 @@ function App() {
 	const [isSignupMode, setIsSignupMode] = useState(false);
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+
+	// User state
+	const [isLoggedIn, setIsLoggedIn] = useState(false);
+	const [currentUser, setCurrentUser] = useState<{userId: string; email: string; accessToken: string} | null>(null);
+
+	// Filter state
+	const [hideCompleted, setHideCompleted] = useState(false);
+
+	// Manual add modal state
+	const [showManualAddModal, setShowManualAddModal] = useState(false);
+	const [manualTodo, setManualTodo] = useState<Plan>({
+		title: "",
+		description: "",
+		event_date: "",
+		event_time: "",
+		location: "",
+		priority: "medium",
+		status: false,
+	});
+
+	// Restore login state from localStorage on mount
+	useEffect(() => {
+		const accessToken = localStorage.getItem("accessToken");
+		const userId = localStorage.getItem("userId");
+		const userEmail = localStorage.getItem("userEmail");
+
+		if (accessToken && userId && userEmail) {
+			setIsLoggedIn(true);
+			setCurrentUser({
+				userId,
+				email: userEmail,
+				accessToken,
+			});
+		}
+	}, []);
 
 	const handleInput = (event: React.ChangeEvent<HTMLInputElement>) => {
 		setInputValue(event.target.value);
@@ -74,8 +109,8 @@ function App() {
 			const processedTodos = data.todos.map(todo => ({
 				title: todo.title || "미정",
 				description: todo.description || "미정",
-				due_date: todo.due_date || "미정",
-				due_time: todo.due_time || "미정",
+				event_date: todo.event_date || "미정",
+				event_time: todo.event_time || "미정",
 				location: todo.location || "미정",
 				priority: todo.priority || "미정",
 				status: todo.status || false,
@@ -148,10 +183,18 @@ function App() {
 		}
 	};
 
-	const getSortedPlans = () => {
-		if (sortOrder === "none") return save;
+	const getFilteredPlans = () => {
+		if (hideCompleted) {
+			return save.filter(plan => !plan.status);
+		}
+		return save;
+	};
 
-		const sorted = [...save].sort((a, b) => {
+	const getSortedPlans = () => {
+		const filteredPlans = getFilteredPlans();
+		if (sortOrder === "none") return filteredPlans;
+
+		const sorted = [...filteredPlans].sort((a, b) => {
 			if (sortOrder === "priority") {
 				const priorityA = getPriorityValue(a.priority);
 				const priorityB = getPriorityValue(b.priority);
@@ -159,13 +202,13 @@ function App() {
 			}
 
 			// Items without dates go to the end
-			if (!a.due_date && !b.due_date) return 0;
-			if (!a.due_date) return 1;
-			if (!b.due_date) return -1;
+			if (!a.event_date && !b.event_date) return 0;
+			if (!a.event_date) return 1;
+			if (!b.event_date) return -1;
 
 			// Parse dates for comparison
-			const dateA = new Date(a.due_date + (a.due_time ? ` ${a.due_time}` : ""));
-			const dateB = new Date(b.due_date + (b.due_time ? ` ${b.due_time}` : ""));
+			const dateA = new Date(a.event_date + (a.event_time ? ` ${a.event_time}` : ""));
+			const dateB = new Date(b.event_date + (b.event_time ? ` ${b.event_time}` : ""));
 
 			if (sortOrder === "date-asc") {
 				return dateA.getTime() - dateB.getTime();
@@ -189,12 +232,12 @@ function App() {
 
 			if (calendarSortOrder === "time") {
 				// Items without time go to the end
-				if (!a.due_time && !b.due_time) return 0;
-				if (!a.due_time) return 1;
-				if (!b.due_time) return -1;
+				if (!a.event_time && !b.event_time) return 0;
+				if (!a.event_time) return 1;
+				if (!b.event_time) return -1;
 
 				// Compare times
-				return a.due_time.localeCompare(b.due_time);
+				return a.event_time.localeCompare(b.event_time);
 			}
 
 			return 0;
@@ -257,7 +300,7 @@ function App() {
 
 	// Get todos by date
 	const getTodosByDate = (dateString: string) => {
-		return save.filter(todo => todo.due_date === dateString);
+		return save.filter(todo => todo.event_date === dateString);
 	};
 
 	// Get todo count for a specific date
@@ -340,6 +383,20 @@ function App() {
 
 			const data = await response.json();
 			console.log("로그인 성공:", data);
+
+			// Set user state
+			setIsLoggedIn(true);
+			setCurrentUser({
+				userId: data.user_id,
+				email: data.email,
+				accessToken: data.access_token
+			});
+
+			// Store in localStorage
+			localStorage.setItem("accessToken", data.access_token);
+			localStorage.setItem("userId", data.user_id);
+			localStorage.setItem("userEmail", data.email);
+
 			alert("로그인 성공!");
 			setShowAuthModal(false);
 			setEmail("");
@@ -348,6 +405,90 @@ function App() {
 			console.error("로그인 오류:", error);
 			alert(error instanceof Error ? error.message : "로그인 중 오류가 발생했습니다.");
 		}
+	};
+
+	const handleLogout = () => {
+		setIsLoggedIn(false);
+		setCurrentUser(null);
+		localStorage.removeItem("accessToken");
+		localStorage.removeItem("userId");
+		localStorage.removeItem("userEmail");
+		alert("로그아웃 되었습니다.");
+	};
+
+	const handleSaveTodos = async () => {
+		if (!isLoggedIn || !currentUser) {
+			alert("로그인이 필요합니다.");
+			return;
+		}
+
+		if (save.length === 0) {
+			alert("저장할 할 일이 없습니다.");
+			return;
+		}
+
+		try {
+			const response = await fetch("http://127.0.0.1:8000/tasks/save", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${currentUser.accessToken}`,
+				},
+				body: JSON.stringify({
+					todos: save.map(todo => ({
+						title: todo.title,
+						description: todo.description,
+						event_date: todo.event_date === "미정" ? null : todo.event_date,
+						event_time: todo.event_time === "미정" ? null : todo.event_time,
+						location: todo.location === "미정" ? null : todo.location,
+						priority: todo.priority === "미정" ? "medium" : todo.priority,
+						status: todo.status,
+					})),
+				}),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`저장 실패: ${errorText}`);
+			}
+
+			const data = await response.json();
+			console.log("저장 성공:", data);
+			alert(`${data.count}개의 할 일이 저장되었습니다!`);
+		} catch (error) {
+			console.error("저장 오류:", error);
+			alert(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
+		}
+	};
+
+	const handleManualAdd = () => {
+		if (!manualTodo.title.trim()) {
+			alert("제목을 입력해주세요.");
+			return;
+		}
+
+		const newTodo: Plan = {
+			title: manualTodo.title || "미정",
+			description: manualTodo.description || "미정",
+			event_date: manualTodo.event_date || "미정",
+			event_time: manualTodo.event_time || "미정",
+			location: manualTodo.location || "미정",
+			priority: manualTodo.priority || "medium",
+			status: false,
+		};
+
+		setSave(prevSave => [...prevSave, newTodo]);
+		setShowManualAddModal(false);
+		setManualTodo({
+			title: "",
+			description: "",
+			event_date: "",
+			event_time: "",
+			location: "",
+			priority: "medium",
+			status: false,
+		});
+		alert("할 일이 추가되었습니다!");
 	};
 
 	const handleSignup = async () => {
@@ -392,6 +533,113 @@ function App() {
 
 	return (
 		<div className="min-h-screen bg-gray-50">
+			{/* Manual Add Todo Modal */}
+			{showManualAddModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white border-2 border-gray-300 p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+						<div className="text-center mb-6">
+							<h2 className="text-3xl font-bold text-gray-800 mb-2">할 일 추가</h2>
+							<p className="text-gray-600">수동으로 할 일을 추가합니다</p>
+						</div>
+
+						<div className="space-y-4">
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">제목 *</label>
+								<input
+									type="text"
+									value={manualTodo.title}
+									onChange={(e) => setManualTodo({...manualTodo, title: e.target.value})}
+									placeholder="할 일 제목"
+									className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+								/>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">설명</label>
+								<textarea
+									value={manualTodo.description}
+									onChange={(e) => setManualTodo({...manualTodo, description: e.target.value})}
+									placeholder="상세 설명"
+									className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+									rows={3}
+								/>
+							</div>
+
+							<div className="grid grid-cols-2 gap-3">
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-2">날짜</label>
+									<input
+										type="date"
+										value={manualTodo.event_date}
+										onChange={(e) => setManualTodo({...manualTodo, event_date: e.target.value})}
+										className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-2">시간</label>
+									<input
+										type="time"
+										value={manualTodo.event_time}
+										onChange={(e) => setManualTodo({...manualTodo, event_time: e.target.value})}
+										className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+									/>
+								</div>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">장소</label>
+								<input
+									type="text"
+									value={manualTodo.location}
+									onChange={(e) => setManualTodo({...manualTodo, location: e.target.value})}
+									placeholder="장소"
+									className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+								/>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">우선순위</label>
+								<select
+									value={manualTodo.priority}
+									onChange={(e) => setManualTodo({...manualTodo, priority: e.target.value})}
+									className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+								>
+									<option value="low">낮음</option>
+									<option value="medium">중간</option>
+									<option value="high">높음</option>
+								</select>
+							</div>
+
+							<button
+								onClick={handleManualAdd}
+								className="w-full px-6 py-3 bg-gray-900 border-2 border-gray-900 text-white font-semibold hover:bg-gray-800 transition-all"
+							>
+								추가하기
+							</button>
+						</div>
+
+						<button
+							onClick={() => {
+								setShowManualAddModal(false);
+								setManualTodo({
+									title: "",
+									description: "",
+									event_date: "",
+									event_time: "",
+									location: "",
+									priority: "medium",
+									status: false,
+								});
+							}}
+							className="mt-6 w-full px-6 py-3 bg-gray-200 border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-all"
+						>
+							취소
+						</button>
+					</div>
+				</div>
+			)}
+
 			{/* Auth Modal */}
 			{showAuthModal && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -475,12 +723,24 @@ function App() {
 						<h1 className="text-4xl font-bold text-gray-900">Smart Planner</h1>
 						<div className="flex items-center gap-4">
 							<p className="text-gray-600">AI가 당신의 일정을 스마트하게 관리합니다</p>
-							<button
-								onClick={() => setShowAuthModal(true)}
-								className="px-4 py-2 bg-indigo-500 border-2 border-indigo-500 text-white font-semibold hover:bg-indigo-600 transition-all"
-							>
-								로그인
-							</button>
+							{isLoggedIn && currentUser ? (
+								<div className="flex items-center gap-3">
+									<span className="text-sm text-gray-700">{currentUser.email}</span>
+									<button
+										onClick={handleLogout}
+										className="px-4 py-2 bg-red-500 border-2 border-red-500 text-white font-semibold hover:bg-red-600 transition-all"
+									>
+										로그아웃
+									</button>
+								</div>
+							) : (
+								<button
+									onClick={() => setShowAuthModal(true)}
+									className="px-4 py-2 bg-indigo-500 border-2 border-indigo-500 text-white font-semibold hover:bg-indigo-600 transition-all"
+								>
+									로그인
+								</button>
+							)}
 						</div>
 					</div>
 				</div>
@@ -503,7 +763,39 @@ function App() {
 						<div className="bg-white border-2 border-gray-300 p-6">
 							<div className="flex items-center justify-between mb-6 flex-wrap gap-3">
 								<h3 className="text-2xl font-bold text-gray-800">AI가 분석한 할 일 목록</h3>
-								<div className="flex items-center gap-3">
+								<div className="flex items-center gap-3 flex-wrap">
+									{/* Manual Add Button */}
+									<button
+										onClick={() => setShowManualAddModal(true)}
+										className="px-4 py-2 bg-green-500 border-2 border-green-500 text-white font-semibold hover:bg-green-600 transition-all text-sm"
+									>
+										+ 수동 추가
+									</button>
+
+									{/* Save Button - only show when logged in */}
+									{isLoggedIn && save.length > 0 && (
+										<button
+											onClick={handleSaveTodos}
+											className="px-4 py-2 bg-blue-500 border-2 border-blue-500 text-white font-semibold hover:bg-blue-600 transition-all text-sm"
+										>
+											저장
+										</button>
+									)}
+
+									{/* Hide Completed Button */}
+									{save.length > 0 && (
+										<button
+											onClick={() => setHideCompleted(!hideCompleted)}
+											className={`px-4 py-2 border-2 font-semibold transition-all text-sm ${
+												hideCompleted
+													? "bg-gray-700 border-gray-700 text-white hover:bg-gray-800"
+													: "bg-white border-gray-300 text-gray-700 hover:bg-gray-100"
+											}`}
+										>
+											{hideCompleted ? "모두 보기" : "완료 숨기기"}
+										</button>
+									)}
+
 									{save.length > 0 && (
 										<>
 											<div className="flex items-center gap-2 bg-white px-3 py-1.5 border-2 border-gray-300">
@@ -544,11 +836,11 @@ function App() {
 														<div className="grid grid-cols-2 gap-3">
 															<div>
 																<label className="block text-sm font-medium text-gray-700 mb-1">날짜</label>
-																<input type="text" value={editValues?.due_date || ""} onChange={e => handleEditChange("due_date", e.target.value)} placeholder="YYYY-MM-DD" className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500" />
+																<input type="text" value={editValues?.event_date || ""} onChange={e => handleEditChange("event_date", e.target.value)} placeholder="YYYY-MM-DD" className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500" />
 															</div>
 															<div>
 																<label className="block text-sm font-medium text-gray-700 mb-1">시간</label>
-																<input type="text" value={editValues?.due_time || ""} onChange={e => handleEditChange("due_time", e.target.value)} placeholder="HH:MM" className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500" />
+																<input type="text" value={editValues?.event_time || ""} onChange={e => handleEditChange("event_time", e.target.value)} placeholder="HH:MM" className="w-full px-3 py-2 border-2 border-gray-300 focus:outline-none focus:border-indigo-500" />
 															</div>
 														</div>
 														<div className="grid grid-cols-2 gap-3">
@@ -599,10 +891,10 @@ function App() {
 
 															<div className="flex flex-wrap gap-4 text-sm">
 																<div className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-blue-700">
-																	<span className="font-medium text-blue-700">날짜: {plan.due_date ? formatDate(plan.due_date) : "미정"}</span>
+																	<span className="font-medium text-blue-700">날짜: {plan.event_date ? formatDate(plan.event_date) : "미정"}</span>
 																</div>
 																<div className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-purple-700">
-																	<span className="font-medium text-purple-700">시간: {plan.due_time ? formatTime(plan.due_time) : "미정"}</span>
+																	<span className="font-medium text-purple-700">시간: {plan.event_time ? formatTime(plan.event_time) : "미정"}</span>
 																</div>
 																<div className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-green-700">
 																	<span className="font-medium text-green-700">장소: {plan.location || "미정"}</span>
@@ -689,7 +981,7 @@ function App() {
 														<h4 className={`font-semibold text-gray-900 ${todo.status ? "line-through" : ""}`}>{todo.title}</h4>
 														{todo.description && <p className={`text-sm text-gray-600 mt-1 ${todo.status ? "line-through" : ""}`}>{todo.description}</p>}
 														<div className="flex items-center gap-2 mt-2 text-xs">
-															{todo.due_time && <span className="px-2 py-1 border-2 border-gray-300 text-gray-900">{formatTime(todo.due_time)}</span>}
+															{todo.event_time && <span className="px-2 py-1 border-2 border-gray-300 text-gray-900">{formatTime(todo.event_time)}</span>}
 															{todo.location && <span className="px-2 py-1 border-2 border-gray-300 text-gray-900">{todo.location}</span>}
 															{todo.priority && <span className={`px-2 py-1 border-2 text-xs font-medium ${getPriorityColor(todo.priority)}`}>{todo.priority}</span>}
 														</div>
