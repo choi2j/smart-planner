@@ -86,7 +86,6 @@ class AccountResponse(BaseModel):
     user_id: str
     email: str
     provider: str
-    created_at: Optional[str] = None
 
 
 class TokenResponse(BaseModel):
@@ -240,7 +239,6 @@ async def signup(request: SignupRequest):
             "email": email,
             "password": hashed_password,
             "provider": request.provider,
-            "created_at": datetime.utcnow().isoformat()
         }).execute()
         
         if response.data and len(response.data) > 0:
@@ -250,7 +248,6 @@ async def signup(request: SignupRequest):
                 user_id=account.get("user_id"),
                 email=account.get("email"),
                 provider=account.get("provider"),
-                created_at=account.get("created_at")
             )
         else:
             raise HTTPException(
@@ -319,7 +316,6 @@ async def get_current_user_info(current_user = Depends(get_current_user)):
         user_id=current_user.get("user_id"),
         email=current_user.get("email"),
         provider=current_user.get("provider"),
-        created_at=current_user.get("created_at")
     )
 
 # ==================== 기본 엔드포인트 ====================
