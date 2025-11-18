@@ -113,6 +113,13 @@ function App() {
 	};
 
 	const handleSubmit = async () => {
+		// Check if user is logged in
+		if (!isLoggedIn) {
+			alert("로그인이 필요합니다.");
+			setShowAuthModal(true);
+			return;
+		}
+
 		if (!inputValue) {
 			console.error("전송할 값이 필요합니다.");
 			return;
@@ -949,13 +956,13 @@ function App() {
 					<div className="lg:col-span-1 space-y-6">
 						{/* Calendar Section */}
 						<div className="bg-white border-2 border-gray-300 p-6">
-							<h3 className="text-xl font-bold text-gray-900 mb-4">{getCurrentMonthYear()}</h3>
+							<h3 className="text-2xl font-bold text-gray-900 mb-6">{getCurrentMonthYear()}</h3>
 
 							{/* Calendar Grid */}
-							<div className="grid grid-cols-7 gap-1">
+							<div className="grid grid-cols-7 gap-2">
 								{/* Day Headers */}
 								{["일", "월", "화", "수", "목", "금", "토"].map(day => (
-									<div key={day} className="text-center text-xs font-medium text-gray-600 py-2">
+									<div key={day} className="text-center text-sm font-semibold text-gray-700 py-3">
 										{day}
 									</div>
 								))}
@@ -970,8 +977,18 @@ function App() {
 									const isSelected = selectedDate === day.dateString;
 
 									return (
-										<button key={day.dateString} onClick={() => setSelectedDate(day.dateString)} className={`aspect-square border-2 flex items-center justify-center text-sm font-medium transition-colors ${isSelected ? "border-gray-900" : day.isToday ? "border-gray-900" : "border-gray-300 hover:border-gray-900"} ${getDateIntensityColor(todoCount, isSelected)}`} title={`${day.day}일 - ${todoCount}개의 할 일`}>
-											{day.day}
+										<button
+											key={day.dateString}
+											onClick={() => setSelectedDate(day.dateString)}
+											className={`aspect-square border-2 flex flex-col items-center justify-center text-base font-semibold transition-colors p-2 ${isSelected ? "border-gray-900" : day.isToday ? "border-gray-900" : "border-gray-300 hover:border-gray-900"} ${getDateIntensityColor(todoCount, isSelected)}`}
+											title={`${day.day}일 - ${todoCount}개의 할 일`}
+										>
+											<span className="text-lg">{day.day}</span>
+											{todoCount > 0 && (
+												<span className="text-xs font-bold mt-1 opacity-80">
+													{todoCount}개
+												</span>
+											)}
 										</button>
 									);
 								})}
