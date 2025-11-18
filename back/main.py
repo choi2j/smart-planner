@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import google.generativeai as genai
-import os
 import json
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, status
