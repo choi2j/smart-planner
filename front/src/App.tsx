@@ -370,6 +370,7 @@ function App() {
 				body: JSON.stringify({
 					email: email,
 					password: password,
+					provider: 'google'
 				}),
 			});
 
