@@ -61,20 +61,62 @@ function App() {
 		status: false,
 	});
 
+	// Load todos from database
+	const loadTodosFromDatabase = async (token: string) => {
+		try {
+			const response = await fetch("http://127.0.0.1:8000/tasks/load", {
+				method: "GET",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to load todos from database");
+			}
+
+			const todos: Plan[] = await response.json();
+			console.log("Loaded todos from database:", todos);
+
+			// Fill empty fields with "미정"
+			const processedTodos = todos.map(todo => ({
+				title: todo.title || "미정",
+				description: todo.description || "미정",
+				event_date: todo.event_date || "미정",
+				event_time: todo.event_time || "미정",
+				location: todo.location || "미정",
+				priority: todo.priority || "미정",
+				status: todo.status || false,
+			}));
+
+			setSave(processedTodos);
+			console.log("Todos loaded successfully from database");
+		} catch (error) {
+			console.error("Failed to load todos from database:", error);
+		}
+	};
+
 	// Restore login state from localStorage on mount
 	useEffect(() => {
-		const accessToken = localStorage.getItem("accessToken");
-		const userId = localStorage.getItem("userId");
-		const userEmail = localStorage.getItem("userEmail");
+		const loadAuthAndData = async () => {
+			const accessToken = localStorage.getItem("accessToken");
+			const userId = localStorage.getItem("userId");
+			const userEmail = localStorage.getItem("userEmail");
 
-		if (accessToken && userId && userEmail) {
-			setIsLoggedIn(true);
-			setCurrentUser({
-				userId,
-				email: userEmail,
-				accessToken,
-			});
-		}
+			if (accessToken && userId && userEmail) {
+				setIsLoggedIn(true);
+				setCurrentUser({
+					userId,
+					email: userEmail,
+					accessToken,
+				});
+
+				// Load todos from database after restoring login state
+				await loadTodosFromDatabase(accessToken);
+			}
+		};
+
+		loadAuthAndData();
 	}, []);
 
 	const handleInput = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -396,6 +438,9 @@ function App() {
 			localStorage.setItem("accessToken", data.access_token);
 			localStorage.setItem("userId", data.user_id);
 			localStorage.setItem("userEmail", data.email);
+
+			// Load todos from database after login
+			await loadTodosFromDatabase(data.access_token);
 
 			alert("로그인 성공!");
 			setShowAuthModal(false);
