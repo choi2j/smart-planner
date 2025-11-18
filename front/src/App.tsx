@@ -6,12 +6,12 @@ interface User {
 }
 
 interface Plan {
-	title: string | "";
-	description: string | "";
-	due_date: string | "";
-	due_time: string | "";
-	location: string | "";
-	priority: string | "";
+	title: string | "미정";
+	description: string | "미정";
+	due_date: string | "미정";
+	due_time: string | "미정";
+	location: string | "미정";
+	priority: string | "미정";
 	status: boolean;
 }
 
@@ -24,9 +24,11 @@ interface ApiResponse {
 function App() {
 	const [inputValue, setInputValue] = useState("");
 	const [save, setSave] = useState<Plan[]>([]);
-	const [sortOrder, setSortOrder] = useState<"date-asc" | "date-desc" | "none">("none");
+	const [sortOrder, setSortOrder] = useState<"date-asc" | "date-desc" | "priority" | "none">("none");
+	const [calendarSortOrder, setCalendarSortOrder] = useState<"priority" | "time" | "none">("none");
 	const [editingIndex, setEditingIndex] = useState<number | null>(null);
 	const [editValues, setEditValues] = useState<Plan | null>(null);
+	const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
 	const [user, setUser] = useState<User | null>(null);
 	const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -215,7 +217,19 @@ function App() {
 			if (!response.ok) throw new Error("Failed to load todos");
 
 			const todos: Plan[] = await response.json();
-			setSave(todos);
+
+			// Fill empty fields with "미정"
+			const processedTodos = todos.map(todo => ({
+				title: todo.title || "미정",
+				description: todo.description || "미정",
+				due_date: todo.due_date || "미정",
+				due_time: todo.due_time || "미정",
+				location: todo.location || "미정",
+				priority: todo.priority || "미정",
+				status: todo.status || false
+			}));
+
+			setSave(processedTodos);
 			console.log("Todos loaded successfully");
 		} catch (error) {
 			console.error("Failed to load todos:", error);
@@ -250,7 +264,18 @@ function App() {
 			console.log(data);
 			alert("데이터 전송 성공!");
 
-			setSave((prevSave) => [...prevSave, ...data.todos]);
+			// Fill empty fields with "미정"
+			const processedTodos = data.todos.map(todo => ({
+				title: todo.title || "미정",
+				description: todo.description || "미정",
+				due_date: todo.due_date || "미정",
+				due_time: todo.due_time || "미정",
+				location: todo.location || "미정",
+				priority: todo.priority || "미정",
+				status: todo.status || false
+			}));
+
+			setSave((prevSave) => [...prevSave, ...processedTodos]);
 			setInputValue("");
 		} catch (error) {
 			console.error(error);
@@ -301,10 +326,32 @@ function App() {
 		}
 	};
 
+	const getPriorityValue = (priority: string) => {
+		switch (priority.toLowerCase()) {
+			case "높음":
+			case "high":
+				return 3;
+			case "중간":
+			case "medium":
+				return 2;
+			case "낮음":
+			case "low":
+				return 1;
+			default:
+				return 0;
+		}
+	};
+
 	const getSortedPlans = () => {
 		if (sortOrder === "none") return save;
 
 		const sorted = [...save].sort((a, b) => {
+			if (sortOrder === "priority") {
+				const priorityA = getPriorityValue(a.priority);
+				const priorityB = getPriorityValue(b.priority);
+				return priorityB - priorityA; // Higher priority first
+			}
+
 			// Items without dates go to the end
 			if (!a.due_date && !b.due_date) return 0;
 			if (!a.due_date) return 1;
@@ -319,6 +366,32 @@ function App() {
 			} else {
 				return dateB.getTime() - dateA.getTime();
 			}
+		});
+
+		return sorted;
+	};
+
+	const getSortedCalendarTodos = (todos: Plan[]) => {
+		if (calendarSortOrder === "none") return todos;
+
+		const sorted = [...todos].sort((a, b) => {
+			if (calendarSortOrder === "priority") {
+				const priorityA = getPriorityValue(a.priority);
+				const priorityB = getPriorityValue(b.priority);
+				return priorityB - priorityA; // Higher priority first
+			}
+
+			if (calendarSortOrder === "time") {
+				// Items without time go to the end
+				if (!a.due_time && !b.due_time) return 0;
+				if (!a.due_time) return 1;
+				if (!b.due_time) return -1;
+
+				// Compare times
+				return a.due_time.localeCompare(b.due_time);
+			}
+
+			return 0;
 		});
 
 		return sorted;
@@ -376,6 +449,66 @@ function App() {
 		}
 	};
 
+	// Get todos by date
+	const getTodosByDate = (dateString: string) => {
+		return save.filter((todo) => todo.due_date === dateString);
+	};
+
+	// Get todo count for a specific date
+	const getTodoCountForDate = (dateString: string) => {
+		return getTodosByDate(dateString).length;
+	};
+
+	// Get intensity color based on todo count (like GitHub)
+	const getDateIntensityColor = (count: number, isSelected: boolean = false) => {
+		if (isSelected) {
+			return "bg-gray-900 text-white";
+		}
+		if (count === 0) return "bg-gray-100 text-gray-900";
+		if (count === 1) return "bg-green-200 text-gray-900";
+		if (count === 2) return "bg-green-400 text-gray-900";
+		if (count >= 3) return "bg-green-600 text-white";
+		return "bg-green-800 text-white";
+	};
+
+	// Generate calendar days for current month
+	const generateCalendarDays = () => {
+		const today = new Date();
+		const year = today.getFullYear();
+		const month = today.getMonth();
+
+		const firstDay = new Date(year, month, 1);
+		const lastDay = new Date(year, month + 1, 0);
+		const daysInMonth = lastDay.getDate();
+		const startingDayOfWeek = firstDay.getDay();
+
+		const days = [];
+
+		// Add empty cells for days before month starts
+		for (let i = 0; i < startingDayOfWeek; i++) {
+			days.push(null);
+		}
+
+		// Add actual days
+		for (let day = 1; day <= daysInMonth; day++) {
+			// Use local date string instead of ISO to avoid timezone issues
+			const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+			const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+			days.push({
+				day,
+				dateString,
+				isToday: dateString === todayString,
+			});
+		}
+
+		return days;
+	};
+
+	const getCurrentMonthYear = () => {
+		const today = new Date();
+		return `${today.getFullYear()}년 ${today.getMonth() + 1}월`;
+	};
+
 	if (isLoading) {
 		const hasHashParams = window.location.hash.includes("access_token");
 
@@ -430,9 +563,9 @@ function App() {
 				</div>
 			)}
 
-			<div className="container mx-auto px-4 py-8 max-w-4xl">
+			<div className="container mx-auto px-4 py-8 max-w-7xl">
 				{/* Header */}
-				<div className="text-center mb-8">
+				<div className="mb-8">
 					{window.location.hostname === "127.0.0.1" && (
 						<div className="mb-4 p-3 bg-white border-2 border-gray-900">
 							<p className="text-sm text-gray-900 font-medium">
@@ -446,9 +579,9 @@ function App() {
 					)}
 
 					<div className="flex items-center justify-between mb-4">
-						<div className="flex-1"></div>
 						<h1 className="text-4xl font-bold text-gray-900">Smart Planner</h1>
-						<div className="flex-1 flex justify-end">
+						<div className="flex items-center gap-4">
+							<p className="text-gray-600">AI가 당신의 일정을 스마트하게 관리합니다</p>
 							{user ? (
 								<div className="flex items-center gap-3">
 									<div className="text-right">
@@ -471,34 +604,37 @@ function App() {
 							)}
 						</div>
 					</div>
-					<p className="text-gray-600">AI가 당신의 일정을 스마트하게 관리합니다</p>
 					{user && (
-						<p className="text-sm text-gray-500 mt-2">자동 저장 활성화</p>
+						<p className="text-sm text-gray-500">자동 저장 활성화</p>
 					)}
 				</div>
 
-				{/* Input Section */}
-				<div className="bg-white border-2 border-gray-300 p-6 mb-8">
-					<div className="flex flex-col sm:flex-row gap-3">
-						<input
-							type="text"
-							value={inputValue}
-							onChange={handleInput}
-							placeholder="할 일을 입력하세요... (예: 내일 오후 3시에 회의)"
-							className="flex-1 px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
-							onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-						/>
-						<button
-							onClick={handleSubmit}
-							className="px-6 py-3 bg-gray-900 border-2 border-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
-						>
-							전송
-						</button>
-					</div>
-				</div>
+				{/* Two Column Layout */}
+				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+					{/* Left Column - Input and AI Results */}
+					<div className="lg:col-span-2 space-y-6">
+						{/* Input Section */}
+						<div className="bg-white border-2 border-gray-300 p-6">
+							<div className="flex flex-col sm:flex-row gap-3">
+								<input
+									type="text"
+									value={inputValue}
+									onChange={handleInput}
+									placeholder="할 일을 입력하세요... (예: 내일 오후 3시에 회의)"
+									className="flex-1 px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+									onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+								/>
+								<button
+									onClick={handleSubmit}
+									className="px-6 py-3 bg-gray-900 border-2 border-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
+								>
+									전송
+								</button>
+							</div>
+						</div>
 
-				{/* Plans Section */}
-				<div className="bg-white border-2 border-gray-300 p-6">
+						{/* AI Results Section */}
+						<div className="bg-white border-2 border-gray-300 p-6">
 					<div className="flex items-center justify-between mb-6 flex-wrap gap-3">
 						<h3 className="text-2xl font-bold text-gray-900">
 							할 일 목록
@@ -510,12 +646,13 @@ function App() {
 										<label className="text-sm text-gray-700 font-medium">정렬:</label>
 										<select
 											value={sortOrder}
-											onChange={(e) => setSortOrder(e.target.value as "date-asc" | "date-desc" | "none")}
+											onChange={(e) => setSortOrder(e.target.value as "date-asc" | "date-desc" | "priority" | "none")}
 											className="bg-transparent text-sm font-medium text-gray-900 focus:outline-none cursor-pointer"
 										>
 											<option value="none">기본</option>
 											<option value="date-asc">날짜 오름차순</option>
 											<option value="date-desc">날짜 내림차순</option>
+											<option value="priority">우선순위</option>
 										</select>
 									</div>
 									<span className="px-3 py-1 bg-white border-2 border-gray-900 text-gray-900 text-sm font-medium">
@@ -690,6 +827,134 @@ function App() {
 							))}
 						</div>
 					)}
+						</div>
+					</div>
+
+					{/* Right Column - Calendar and Selected Date Todos */}
+					<div className="lg:col-span-1 space-y-6">
+						{/* Calendar Section */}
+						<div className="bg-white border-2 border-gray-300 p-6">
+							<h3 className="text-xl font-bold text-gray-900 mb-4">{getCurrentMonthYear()}</h3>
+
+							{/* Calendar Grid */}
+							<div className="grid grid-cols-7 gap-1">
+								{/* Day Headers */}
+								{['일', '월', '화', '수', '목', '금', '토'].map((day) => (
+									<div key={day} className="text-center text-xs font-medium text-gray-600 py-2">
+										{day}
+									</div>
+								))}
+
+								{/* Calendar Days */}
+								{generateCalendarDays().map((day, index) => {
+									if (!day) {
+										return <div key={`empty-${index}`} className="aspect-square" />;
+									}
+
+									const todoCount = getTodoCountForDate(day.dateString);
+									const isSelected = selectedDate === day.dateString;
+
+									return (
+										<button
+											key={day.dateString}
+											onClick={() => setSelectedDate(day.dateString)}
+											className={`aspect-square border-2 flex items-center justify-center text-sm font-medium transition-colors ${
+												isSelected
+													? 'border-gray-900'
+													: day.isToday
+													? 'border-gray-900'
+													: 'border-gray-300 hover:border-gray-900'
+											} ${getDateIntensityColor(todoCount, isSelected)}`}
+											title={`${day.day}일 - ${todoCount}개의 할 일`}
+										>
+											{day.day}
+										</button>
+									);
+								})}
+							</div>
+						</div>
+
+						{/* Selected Date Todos */}
+						{selectedDate && (
+							<div className="bg-white border-2 border-gray-300 p-6">
+								<div className="flex items-center justify-between mb-4">
+									<h3 className="text-xl font-bold text-gray-900">
+										{formatDate(selectedDate)}
+									</h3>
+									{getTodosByDate(selectedDate).length > 0 && (
+										<div className="flex items-center gap-2 bg-white px-2 py-1 border-2 border-gray-300">
+											<label className="text-xs text-gray-700 font-medium">정렬:</label>
+											<select
+												value={calendarSortOrder}
+												onChange={(e) => setCalendarSortOrder(e.target.value as "priority" | "time" | "none")}
+												className="bg-transparent text-xs font-medium text-gray-900 focus:outline-none cursor-pointer"
+											>
+												<option value="none">기본</option>
+												<option value="time">시간순</option>
+												<option value="priority">우선순위</option>
+											</select>
+										</div>
+									)}
+								</div>
+
+								{getTodosByDate(selectedDate).length === 0 ? (
+									<p className="text-gray-500 text-center py-8">
+										이 날짜에 할 일이 없습니다.
+									</p>
+								) : (
+									<div className="space-y-3 max-h-[400px] overflow-y-auto">
+										{getSortedCalendarTodos(getTodosByDate(selectedDate)).map((todo, index) => (
+											<div
+												key={index}
+												className={`border-2 border-gray-300 p-3 ${
+													todo.status ? 'opacity-50' : ''
+												}`}
+											>
+												<div className="flex items-start gap-2">
+													<input
+														type="checkbox"
+														checked={todo.status}
+														onChange={() => {
+															const globalIndex = save.findIndex((t) => t === todo);
+															handleToggleStatus(globalIndex);
+														}}
+														className="mt-1 w-4 h-4 border-2 border-gray-400 cursor-pointer"
+													/>
+													<div className="flex-1">
+														<h4 className={`font-semibold text-gray-900 ${todo.status ? 'line-through' : ''}`}>
+															{todo.title}
+														</h4>
+														{todo.description && (
+															<p className={`text-sm text-gray-600 mt-1 ${todo.status ? 'line-through' : ''}`}>
+																{todo.description}
+															</p>
+														)}
+														<div className="flex items-center gap-2 mt-2 text-xs">
+															{todo.due_time && (
+																<span className="px-2 py-1 border border-gray-300 text-gray-900">
+																	{formatTime(todo.due_time)}
+																</span>
+															)}
+															{todo.location && (
+																<span className="px-2 py-1 border border-gray-300 text-gray-900">
+																	{todo.location}
+																</span>
+															)}
+															{todo.priority && (
+																<span className={`px-2 py-1 border text-xs font-medium ${getPriorityColor(todo.priority)}`}>
+																	{todo.priority}
+																</span>
+															)}
+														</div>
+													</div>
+												</div>
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>
