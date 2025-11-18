@@ -53,7 +53,7 @@ function App() {
 	// Load todos from database
 	const loadTodosFromDatabase = async (token: string) => {
 		try {
-			const response = await fetch("https://smart-planner-back.vercel.app/tasks/load", {
+			const response = await fetch("/tasks/load", {
 				method: "GET",
 				headers: {
 					Authorization: `Bearer ${token}`,
@@ -120,7 +120,7 @@ function App() {
 		console.log(inputValue);
 
 		try {
-			const response = await fetch("https://smart-planner-back.vercel.app/todo-request", {
+			const response = await fetch("/todo-request", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -396,7 +396,7 @@ function App() {
 		}
 
 		try {
-			const response = await fetch("https://smart-planner-back.vercel.app/signin", {
+			const response = await fetch("/signin", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -462,7 +462,7 @@ function App() {
 		}
 
 		try {
-			const response = await fetch("https://smart-planner-back.vercel.app/tasks/save", {
+			const response = await fetch("/tasks/save", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -537,7 +537,7 @@ function App() {
 		}
 
 		try {
-			const response = await fetch("https://smart-planner-back.vercel.app/signup", {
+			const response = await fetch("/signup", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
