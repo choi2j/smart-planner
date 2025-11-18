@@ -1,19 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from pydantic_settings import BaseSettings
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import google.generativeai as genai
 import json
+import hashlib
+import os
+import jwt
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from supabase import create_client, Client
 from pydantic_settings import BaseSettings
+import httpx
 
 load_dotenv()
 
 # 설정 클래스
 class Settings(BaseSettings):
     gemini_api_key: str
-
+    
     class Config:
         env_file = ".env"
 
@@ -25,6 +31,7 @@ app = FastAPI(
     description="SMART-PLANNER-API 백엔드",
     version="1.0.0"
 )
+security = HTTPBearer()
 
 # gemini
 genai.configure(api_key=settings.gemini_api_key)
@@ -44,7 +51,6 @@ app.add_middleware(
 @app.get("/signup")
 async def sign_up():
     return "d"
-
 # ==================== 기존 엔드포인트 ====================
 
 # default status
@@ -66,6 +72,9 @@ class reptest(BaseModel):
 @app.post("/test", response_model=reptest)
 async def parse_todo(request: testmodel):
     return request.testmsg
+
+
+
 
 # AI - fucking god damn
 
