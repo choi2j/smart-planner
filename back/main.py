@@ -462,6 +462,7 @@ async def load_todos(current_user = Depends(get_current_user)):
                 status=item["status"]
             ))
 
+
         return todos
     except Exception as e:
         raise HTTPException(
