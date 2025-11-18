@@ -1,14 +1,18 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from pydantic_settings import BaseSettings
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import google.generativeai as genai
 import json
+import hashlib
+import os
+import jwt
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
-from pydantic_settings import BaseSettings
+from typing import Optional
 import httpx
 
 load_dotenv()
@@ -19,6 +23,7 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_anon_key: str
     gemini_api_key: str
+    secret_key: str
     
     class Config:
         env_file = ".env"
@@ -32,6 +37,8 @@ app = FastAPI(
     version="1.0.0"
 )
 security = HTTPBearer()
+SECRET_KEY = os.getenv("SECRET_KEY", settings.secret_key)
+ALGORITHM = "HS256"
 
 # gemini
 genai.configure(api_key=settings.gemini_api_key)
@@ -54,9 +61,195 @@ app.add_middleware(
 
 # ==================== sign ====================
 
-@app.get("/signup")
-async def sign_up():
-    return "d"
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str
+    provider: str = "google"  # email, google, github 등
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class AccountResponse(BaseModel):
+    id: str
+    user_id: str
+    email: str
+    provider: str
+    created_at: Optional[str] = None
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user_id: str
+    email: str
+
+def extract_user_id_from_email(email: str) -> str:
+    return email.split("@")[0]
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+
+def create_access_token(user_id: str, email: str, expires_delta: Optional[timedelta] = None) -> str:
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(hours=24)
+    
+    to_encode = {
+        "user_id": user_id,
+        "email": email,
+        "exp": expire
+    }
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def get_user_by_email(email: str) -> Optional[dict]:
+    """이메일로 계정 조회"""
+    try:
+        response = supabase_client.table("account").select("*").eq("email", email).execute()
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Database error: {e}")
+        return None
+
+@app.post("/signup", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+async def signup(request: SignupRequest):
+    email = request.email.lower()
+    
+    # 이미 존재하는 계정 확인
+    existing_account = get_user_by_email(email)
+    if existing_account:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 가입된 이메일입니다."
+        )
+    try:
+        # user_id 추출 (이메일의 @ 앞부분)
+        user_id = extract_user_id_from_email(email)
+        
+        # 비밀번호 해시
+        hashed_password = hash_password(request.password)
+        
+        # 데이터베이스에 저장
+        response = supabase_client.table("account").insert({
+            "user_id": user_id,
+            "email": email,
+            "password": hashed_password,
+            "provider": request.provider,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        
+        if response.data and len(response.data) > 0:
+            account = response.data[0]
+            return AccountResponse(
+                id=account.get("id"),
+                user_id=account.get("user_id"),
+                email=account.get("email"),
+                provider=account.get("provider"),
+                created_at=account.get("created_at")
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="계정 생성에 실패했습니다."
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Signup error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="회원가입 중 오류가 발생했습니다."
+        )
+
+@app.post("/signin", response_model=TokenResponse)
+async def login(request: LoginRequest):
+    email = request.email.lower()
+    # 계정 조회
+    account = get_user_by_email(email)
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="이메일 또는 비밀번호가 틀렸습니다."
+        )
+    
+    # 비밀번호 검증
+    if not verify_password(request.password, account.get("password", "")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="이메일 또는 비밀번호가 틀렸습니다."
+        )
+    
+    # JWT 토큰 생성
+    user_id = account.get("user_id")
+    access_token = create_access_token(user_id, email)
+    
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user_id=user_id,
+        email=email
+    )
+
+@app.get("/me", response_model=AccountResponse)
+async def get_current_user(token: str = None):
+    """
+    query parameter로 ?token=<token> 형식으로 전달
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="토큰이 필요합니다."
+        )
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("user_id")
+        email: str = payload.get("email")
+        
+        if user_id is None or email is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="유효하지 않은 토큰입니다."
+            )
+            
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="토큰이 만료되었습니다."
+        )
+    except jwt.JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 토큰입니다."
+        )
+    
+    # 데이터베이스에서 사용자 정보 조회
+    account = get_user_by_email(email)
+    if not account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="사용자를 찾을 수 없습니다."
+        )
+    
+    return AccountResponse(
+        id=account.get("id"),
+        user_id=account.get("user_id"),
+        email=account.get("email"),
+        provider=account.get("provider"),
+        created_at=account.get("created_at")
+    )
+
 # ==================== 기존 엔드포인트 ====================
 
 # default status
@@ -78,6 +271,9 @@ class reptest(BaseModel):
 @app.post("/test", response_model=reptest)
 async def parse_todo(request: testmodel):
     return request.testmsg
+
+
+
 
 # AI - fucking god damn
 
