@@ -448,7 +448,6 @@ async def sendTodoList(data: TodoItem, current_user = Depends(get_current_user))
         )
 
 # ==================== Todos Save/Load ====================
-<<<<<<< HEAD
 
 class SaveTodoRequest(BaseModel):
     todos: List[TodoItem]
@@ -481,5 +480,3 @@ async def load_todos():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-=======
->>>>>>> bfc10a6240fc219405366072ef02ac3901a9a8c4
