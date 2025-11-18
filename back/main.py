@@ -448,3 +448,38 @@ async def sendTodoList(data: TodoItem, current_user = Depends(get_current_user))
         )
 
 # ==================== Todos Save/Load ====================
+<<<<<<< HEAD
+
+class SaveTodoRequest(BaseModel):
+    todos: List[TodoItem]
+
+@app.post('/todos/save')
+async def save_todos(request: SaveTodoRequest):
+    """할 일 저장 (인증 제거됨 - 데이터베이스 기능 제거)"""
+    try:
+        # Note: Authentication and database functionality removed
+        return {"message": "Todos received (not saved to database)", "count": len(request.todos)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process todos: {str(e)}"
+        )
+
+@app.get('/todos/load', response_model=List[TodoItem])
+async def load_todos():
+    """할 일 로드 (인증 제거됨 - 빈 리스트 반환)"""
+    try:
+        # Note: Authentication and database functionality removed
+        # Returns empty list as there's no user-specific data
+        return []
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load todos: {str(e)}"
+        )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+=======
+>>>>>>> bfc10a6240fc219405366072ef02ac3901a9a8c4

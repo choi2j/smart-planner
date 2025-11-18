@@ -36,6 +36,12 @@ function App() {
 	const [editValues, setEditValues] = useState<Plan | null>(null);
 	const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+	// Auth modal state
+	const [showAuthModal, setShowAuthModal] = useState(false);
+	const [isSignupMode, setIsSignupMode] = useState(false);
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
+
 	const handleInput = (event: React.ChangeEvent<HTMLInputElement>) => {
 		setInputValue(event.target.value);
 	};
@@ -309,14 +315,172 @@ function App() {
 		return `${today.getFullYear()}년 ${today.getMonth() + 1}월`;
 	};
 
+	const handleSignin = async () => {
+		if (!email || !password) {
+			alert("이메일과 비밀번호를 입력해주세요.");
+			return;
+		}
+
+		try {
+			const response = await fetch("http://127.0.0.1:8000/signin", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: email,
+					password: password,
+				}),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`로그인 실패: ${errorText}`);
+			}
+
+			const data = await response.json();
+			console.log("로그인 성공:", data);
+			alert("로그인 성공!");
+			setShowAuthModal(false);
+			setEmail("");
+			setPassword("");
+		} catch (error) {
+			console.error("로그인 오류:", error);
+			alert(error instanceof Error ? error.message : "로그인 중 오류가 발생했습니다.");
+		}
+	};
+
+	const handleSignup = async () => {
+		if (!email || !password) {
+			alert("이메일과 비밀번호를 입력해주세요.");
+			return;
+		}
+
+		if (password.length < 6) {
+			alert("비밀번호는 최소 6자 이상이어야 합니다.");
+			return;
+		}
+
+		try {
+			const response = await fetch("http://127.0.0.1:8000/signup", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: email,
+					password: password,
+				}),
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`회원가입 실패: ${errorText}`);
+			}
+
+			const data = await response.json();
+			console.log("회원가입 성공:", data);
+			alert("회원가입 성공! 로그인해주세요.");
+			setIsSignupMode(false);
+			setPassword("");
+		} catch (error) {
+			console.error("회원가입 오류:", error);
+			alert(error instanceof Error ? error.message : "회원가입 중 오류가 발생했습니다.");
+		}
+	};
+
 	return (
 		<div className="min-h-screen bg-gray-50">
+			{/* Auth Modal */}
+			{showAuthModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+					<div className="bg-white border-2 border-gray-300 p-8 max-w-md w-full mx-4">
+						<div className="text-center mb-6">
+							<h2 className="text-3xl font-bold text-gray-800 mb-2">
+								{isSignupMode ? "회원가입" : "로그인"}
+							</h2>
+							<p className="text-gray-600">
+								{isSignupMode ? "계정을 생성하여 시작하세요" : "이메일과 비밀번호로 로그인하세요"}
+							</p>
+						</div>
+
+						<div className="space-y-4">
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">이메일</label>
+								<input
+									type="email"
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									placeholder="example@email.com"
+									className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+									onKeyDown={(e) => e.key === "Enter" && (isSignupMode ? handleSignup() : handleSignin())}
+								/>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2">비밀번호</label>
+								<input
+									type="password"
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									placeholder="••••••••"
+									className="w-full px-4 py-2 border-2 border-gray-300 focus:outline-none focus:border-gray-900 transition-colors"
+									onKeyDown={(e) => e.key === "Enter" && (isSignupMode ? handleSignup() : handleSignin())}
+								/>
+								{isSignupMode && (
+									<p className="text-xs text-gray-500 mt-1">최소 6자 이상</p>
+								)}
+							</div>
+
+							<button
+								onClick={isSignupMode ? handleSignup : handleSignin}
+								className="w-full px-6 py-3 bg-gray-900 border-2 border-gray-900 text-white font-semibold hover:bg-gray-800 transition-all"
+							>
+								{isSignupMode ? "회원가입" : "로그인"}
+							</button>
+
+							<div className="text-center">
+								<button
+									onClick={() => {
+										setIsSignupMode(!isSignupMode);
+										setPassword("");
+									}}
+									className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+								>
+									{isSignupMode ? "이미 계정이 있으신가요? 로그인" : "계정이 없으신가요? 회원가입"}
+								</button>
+							</div>
+						</div>
+
+						<button
+							onClick={() => {
+								setShowAuthModal(false);
+								setEmail("");
+								setPassword("");
+								setIsSignupMode(false);
+							}}
+							className="mt-6 w-full px-6 py-3 bg-gray-200 border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-all"
+						>
+							취소
+						</button>
+					</div>
+				</div>
+			)}
+
 			<div className="container mx-auto px-4 py-8 max-w-7xl">
 				{/* Header */}
 				<div className="mb-8">
 					<div className="flex items-center justify-between mb-4">
 						<h1 className="text-4xl font-bold text-gray-900">Smart Planner</h1>
-						<p className="text-gray-600">AI가 당신의 일정을 스마트하게 관리합니다</p>
+						<div className="flex items-center gap-4">
+							<p className="text-gray-600">AI가 당신의 일정을 스마트하게 관리합니다</p>
+							<button
+								onClick={() => setShowAuthModal(true)}
+								className="px-4 py-2 bg-indigo-500 border-2 border-indigo-500 text-white font-semibold hover:bg-indigo-600 transition-all"
+							>
+								로그인
+							</button>
+						</div>
 					</div>
 				</div>
 
