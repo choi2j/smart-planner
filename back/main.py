@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # Supabase 설정
     supabase_url: str
     supabase_anon_key: str
+    supabase_service_role_key: str  # ← 🔴 추가: Service Role Key
     
     # Gemini API 설정
     gemini_api_key: str
@@ -53,10 +54,17 @@ ALGORITHM = "HS256"
 genai.configure(api_key=settings.gemini_api_key)
 model = genai.GenerativeModel("gemini-2.0-flash")
 
-# Supabase 클라이언트 초기화
+# ==================== 🔴 수정: Supabase 클라이언트 2개 생성 ====================
+# 일반 작업용 (anon key - RLS 적용됨)
 supabase_client: Client = create_client(
     settings.supabase_url,
     settings.supabase_anon_key
+)
+
+# 인증 작업용 (service role key - RLS 무시)
+supabase_admin: Client = create_client(
+    settings.supabase_url,
+    settings.supabase_service_role_key
 )
 
 # CORS 설정
@@ -153,7 +161,8 @@ def create_access_token(user_id: str, email: str, expires_delta: Optional[timede
 def get_user_by_user_id(user_id: str) -> Optional[dict]:
     """user_id로 계정 조회"""
     try:
-        response = supabase_client.table("account").select("*").eq("user_id", user_id).execute()
+        # 🔴 수정: admin 클라이언트 사용
+        response = supabase_admin.table("account").select("*").eq("user_id", user_id).execute()
         if response.data and len(response.data) > 0:
             return response.data[0]
         return None
@@ -214,7 +223,8 @@ async def signup(request: SignupRequest):
     try:
         hashed_password = hash_password(request.password)
         
-        response = supabase_client.table("account").insert({
+        # 🔴 수정: admin 클라이언트 사용 (RLS 무시)
+        response = supabase_admin.table("account").insert({
             "user_id": user_id,
             "password": hashed_password,
             "provider": request.provider,
@@ -482,8 +492,3 @@ async def load_tasks(current_user = Depends(get_current_user)):
             status_code=500,
             detail=f"Tasks 로드 중 오류 발생: {str(e)}"
         )
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
