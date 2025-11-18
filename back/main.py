@@ -9,6 +9,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
 from pydantic_settings import BaseSettings
+import httpx
 
 load_dotenv()
 
@@ -51,7 +52,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==================== 인증 미들웨어 ====================
+# ==================== Auth ====================
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
@@ -78,7 +79,6 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-# ==================== 인증 관련 엔드포인트 ====================
 
 # Pydantic 모델
 class OAuthLoginRequest(BaseModel):
@@ -95,11 +95,12 @@ async def oauth_login(request: OAuthLoginRequest):
         print(f"🔑 OAuth login request for provider: {request.provider}")
         print(f"🏠 Redirect URL: {settings.frontend_url}")
 
+        # skip_browser_redirect를 False로 변경 (또는 제거)
         data = supabase_client.auth.sign_in_with_oauth({
             "provider": request.provider,
             "options": {
-                "redirect_to": settings.frontend_url,
-                "skip_browser_redirect": True  # We handle redirect in frontend
+                "redirect_to": settings.frontend_url
+                # skip_browser_redirect 제거 - Supabase가 자동으로 처리하게 함
             }
         })
 
@@ -111,33 +112,54 @@ async def oauth_login(request: OAuthLoginRequest):
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=str(e))
 
-# OAuth 콜백 처리
+
+# OAuth 콜백 처리 - 에러 핸들링 강화
 @app.get("/auth/callback")
 async def auth_callback(code: str):
     """OAuth 콜백 처리"""
     try:
-        # Supabase 코드 교환
-        response = supabase_client.auth.exchange_code_for_session(code)
-
-        if not response or not response.session:
-            raise HTTPException(
-                status_code=400,
-                detail="Failed to exchange code for session"
+        print(f"🔄 Received authorization code: {code[:20]}...")
+        
+        # Supabase Auth API 직접 호출
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{settings.supabase_url}/auth/v1/token?grant_type=authorization_code",
+                json={
+                    "auth_code": code
+                },
+                headers={
+                    "apikey": settings.supabase_anon_key,
+                    "Content-Type": "application/json"
+                }
             )
-
-        return {
-            "access_token": response.session.access_token,
-            "refresh_token": response.session.refresh_token,
-            "user": {
-                "id": response.user.id,
-                "email": response.user.email,
-                "user_metadata": response.user.user_metadata
+            
+            print(f"📡 Supabase API response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_text = response.text
+                print(f"❌ Supabase API error: {error_text}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to exchange code: {error_text}"
+                )
+            
+            data = response.json()
+            print(f"✅ Successfully exchanged code for session")
+            
+            return {
+                "access_token": data["access_token"],
+                "refresh_token": data["refresh_token"],
+                "user": {
+                    "id": data["user"]["id"],
+                    "email": data["user"]["email"],
+                    "user_metadata": data["user"].get("user_metadata", {})
+                }
             }
-        }
+            
     except HTTPException:
         raise
     except Exception as e:
-        print(f"OAuth 콜백 에러: {str(e)}")
+        print(f"❌ OAuth 콜백 에러: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(
