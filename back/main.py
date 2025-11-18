@@ -53,11 +53,167 @@ app.add_middleware(
 )
 
 # ==================== Auth ====================
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """JWT 토큰 검증 및 현재 사용자 정보 반환"""
+    try:
+        token = credentials.credentials
+        
+        # Supabase에서 사용자 정보 가져오기
+        response = supabase_client.auth.get_user(token)
+        
+        if not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        return response.user
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-supabase_client.auth.signInWithOAuth({
-    provider: 'google',
-})
 
+# Pydantic 모델
+class OAuthLoginRequest(BaseModel):
+    provider: str  # 'google', 'github', 'kakao' etc.
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+# OAuth 로그인
+@app.post("/auth/oauth/login")
+async def oauth_login(request: OAuthLoginRequest):
+    """OAuth 로그인 URL 생성"""
+    try:
+        print(f"🔑 OAuth login request for provider: {request.provider}")
+        print(f"🏠 Redirect URL: {settings.frontend_url}")
+
+        # skip_browser_redirect를 False로 변경 (또는 제거)
+        data = supabase_client.auth.sign_in_with_oauth({
+            "provider": request.provider,
+            "options": {
+                "redirect_to": settings.frontend_url
+                # skip_browser_redirect 제거 - Supabase가 자동으로 처리하게 함
+            }
+        })
+
+        print(f"🔗 OAuth URL generated: {data.url}")
+        return {"url": data.url}
+    except Exception as e:
+        print(f"❌ OAuth login error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# OAuth 콜백 처리 - 에러 핸들링 강화
+@app.get("/auth/callback")
+async def auth_callback(code: str):
+    """OAuth 콜백 처리"""
+    try:
+        print(f"🔄 Received authorization code: {code[:20]}...")
+        
+        # Supabase Auth API 직접 호출
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{settings.supabase_url}/auth/v1/token?grant_type=authorization_code",
+                json={
+                    "auth_code": code
+                },
+                headers={
+                    "apikey": settings.supabase_anon_key,
+                    "Content-Type": "application/json"
+                }
+            )
+            
+            print(f"📡 Supabase API response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_text = response.text
+                print(f"❌ Supabase API error: {error_text}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Failed to exchange code: {error_text}"
+                )
+            
+            data = response.json()
+            print(f"✅ Successfully exchanged code for session")
+            
+            return {
+                "access_token": data["access_token"],
+                "refresh_token": data["refresh_token"],
+                "user": {
+                    "id": data["user"]["id"],
+                    "email": data["user"]["email"],
+                    "user_metadata": data["user"].get("user_metadata", {})
+                }
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ OAuth 콜백 에러: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=400,
+            detail=f"OAuth callback failed: {str(e)}"
+        )
+
+# 현재 사용자 정보
+@app.get("/auth/me")
+async def get_me(current_user = Depends(get_current_user)):
+    """현재 로그인한 사용자 정보"""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "user_metadata": current_user.user_metadata,
+        "created_at": current_user.created_at
+    }
+
+# 토큰 갱신
+@app.post("/auth/refresh")
+async def refresh_token(request: RefreshTokenRequest):
+    """액세스 토큰 갱신"""
+    try:
+        response = supabase_client.auth.refresh_session(request.refresh_token)
+        
+        if not response.session:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid refresh token"
+            )
+        
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
+            "expires_in": response.session.expires_in
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Token refresh failed: {str(e)}"
+        )
+
+# 로그아웃
+@app.post("/auth/logout")
+async def logout(current_user = Depends(get_current_user)):
+    """로그아웃"""
+    try:
+        supabase_client.auth.sign_out()
+        return {"message": "Successfully logged out"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 # ==================== 기존 엔드포인트 ====================
 
