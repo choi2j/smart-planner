@@ -427,12 +427,13 @@ async def parse_todo(request: TodoRequest):
             detail=f"Todo 파싱 중 오류 발생: {str(e)}"
         )
 
+# ================================== SAVE ==============================
 
 @app.post('/send-task')
 async def send_task(data: TodoItem, current_user = Depends(get_current_user)):
     """인증된 사용자의 Task 저장"""
     try:
-        response = supabase_client.table("tasks").insert({
+        response = supabase_admin.table("tasks").insert({
             "user_id": current_user.get("user_id"),
             "title": data.title,
             "description": data.description,
@@ -468,7 +469,7 @@ async def save_tasks(request: SaveTodoRequest, current_user = Depends(get_curren
                 "status": task.status
             })
         
-        response = supabase_client.table("tasks").insert(tasks_data).execute()
+        response = supabase_admin.table("tasks").insert(tasks_data).execute()
         return {"success": True, "count": len(response.data)}
     except Exception as e:
         raise HTTPException(
@@ -481,7 +482,7 @@ async def save_tasks(request: SaveTodoRequest, current_user = Depends(get_curren
 async def load_tasks(current_user = Depends(get_current_user)):
     """사용자의 Task 목록 로드"""
     try:
-        response = supabase_client.table("tasks").select("*").eq(
+        response = supabase_admin.table("tasks").select("*").eq(
             "user_id", current_user.get("user_id")
         ).execute()
         
