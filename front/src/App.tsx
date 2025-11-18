@@ -56,23 +56,15 @@ function App() {
 		const loadAuthFromStorage = async () => {
 			console.log("Checking for auth...");
 			console.log("Current URL:", window.location.href);
-			console.log("Full Hash:", window.location.hash);
 
-			// Check for authorization code in query params (Supabase authorization code flow)
+			// Check for authorization code in query params (OAuth callback)
 			const urlParams = new URLSearchParams(window.location.search);
 			const authCode = urlParams.get("code");
+			const errorParam = urlParams.get("error");
+			const errorDescription = urlParams.get("error_description");
 
-			// Check for Supabase OAuth callback (hash fragment - implicit flow)
-			const hashParams = new URLSearchParams(window.location.hash.substring(1));
-			const accessTokenFromHash = hashParams.get("access_token");
-			const refreshToken = hashParams.get("refresh_token");
-			const errorParam = hashParams.get("error") || urlParams.get("error");
-			const errorDescription = hashParams.get("error_description") || urlParams.get("error_description");
-
-			console.log("OAuth Parameters:");
-			console.log("- Authorization Code:", authCode ? "Found" : "Not found");
-			console.log("- Access Token (hash):", accessTokenFromHash ? "Found" : "Not found");
-			console.log("- Refresh Token:", refreshToken ? "Found" : "Not found");
+			console.log("📝 OAuth Parameters:");
+			console.log("- Authorization Code:", authCode ? "✓ Found" : "✗ Not found");
 			console.log("- Error:", errorParam || "None");
 
 			if (errorParam) {
@@ -136,76 +128,18 @@ function App() {
 				return;
 			}
 
-			// Handle implicit flow (if tokens are in hash)
-			if (accessTokenFromHash) {
-				console.log("Found access token in URL hash!");
-				console.log("Token preview:", accessTokenFromHash.substring(0, 20) + "...");
+			console.log("No code in URL, checking localStorage...");
+			// Load from localStorage
+			const storedToken = localStorage.getItem("access_token");
+			const storedUser = localStorage.getItem("user");
 
-				// OAuth callback with access token in hash
-				try {
-					// Get user info using the access token
-					console.log("Fetching user info from backend...");
-					const userResponse = await fetch("http://127.0.0.1:8000/auth/me", {
-						headers: {
-							Authorization: `Bearer ${accessTokenFromHash}`,
-						},
-					});
+			console.log("Stored token:", storedToken ? "Found" : "Not found");
+			console.log("Stored user:", storedUser ? "Found" : "Not found");
 
-					console.log("User response status:", userResponse.status);
-
-					if (userResponse.ok) {
-						const userData = await userResponse.json();
-						console.log("User data received:", userData);
-
-						// Store in localStorage
-						console.log("Storing auth data in localStorage...");
-						localStorage.setItem("access_token", accessTokenFromHash);
-						if (refreshToken) {
-							localStorage.setItem("refresh_token", refreshToken);
-						}
-						localStorage.setItem("user", JSON.stringify({ id: userData.id, email: userData.email }));
-
-						// Set state
-						console.log("Updating React state...");
-						setAccessToken(accessTokenFromHash);
-						setUser({ id: userData.id, email: userData.email });
-
-						// Load todos
-						console.log("Loading user todos...");
-						await loadTodos(accessTokenFromHash);
-
-						// Clean up URL hash
-						console.log("Cleaning up URL...");
-						window.history.replaceState({}, document.title, window.location.pathname);
-
-						console.log("Login complete!");
-						alert("로그인 성공!");
-					} else {
-						const errorText = await userResponse.text();
-						console.error("Failed to get user info. Status:", userResponse.status);
-						console.error("Error response:", errorText);
-						throw new Error("Failed to get user info");
-					}
-				} catch (error) {
-					console.error("Failed to process OAuth callback:", error);
-					alert("로그인 처리 중 오류가 발생했습니다. 콘솔을 확인하세요.");
-					// Clean up URL even on error
-					window.history.replaceState({}, document.title, window.location.pathname);
-				}
-			} else {
-				console.log("No token in URL, checking localStorage...");
-				// Load from localStorage
-				const storedToken = localStorage.getItem("access_token");
-				const storedUser = localStorage.getItem("user");
-
-				console.log("Stored token:", storedToken ? "Found" : "Not found");
-				console.log("Stored user:", storedUser ? "Found" : "Not found");
-
-				if (storedToken && storedUser) {
-					setAccessToken(storedToken);
-					setUser(JSON.parse(storedUser));
-					await loadTodos(storedToken);
-				}
+			if (storedToken && storedUser) {
+				setAccessToken(storedToken);
+				setUser(JSON.parse(storedUser));
+				await loadTodos(storedToken);
 			}
 
 			setIsLoading(false);
@@ -254,6 +188,7 @@ function App() {
 
 	const handleLogout = () => {
 		localStorage.removeItem("access_token");
+		localStorage.removeItem("refresh_token");
 		localStorage.removeItem("user");
 		setAccessToken(null);
 		setUser(null);
@@ -590,16 +525,16 @@ function App() {
 
 	if (isLoading) {
 		// Check if we're processing OAuth callback
-		const hasHashParams = window.location.hash.includes("access_token");
+		const hasCode = window.location.search.includes("code=");
 
 		return (
 			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
 				<div className="text-center">
 					<p className="text-gray-600 text-lg">
-						{hasHashParams ? "로그인 처리 중..." : "로딩 중..."}
+						{hasCode ? "로그인 처리 중..." : "로딩 중..."}
 					</p>
 					<p className="text-gray-400 text-sm mt-2">
-						{hasHashParams && "잠시만 기다려주세요"}
+						{hasCode && "잠시만 기다려주세요"}
 					</p>
 				</div>
 			</div>
