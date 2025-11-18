@@ -155,7 +155,9 @@ def create_access_token(user_id: str, email: str, expires_delta: Optional[timede
 def get_user_by_email(email: str) -> Optional[dict]:
     """이메일로 계정 조회"""
     try:
-        response = supabase_client.table("account").select("*").eq("email", email).execute()
+        user_id = extract_user_id_from_email(email)
+        # user_id로 Supabase에서 조회
+        response = supabase_client.table("account").select("*").eq("user_id", user_id).execute()
         if response.data and len(response.data) > 0:
             return response.data[0]
         return None
@@ -163,7 +165,6 @@ def get_user_by_email(email: str) -> Optional[dict]:
         print(f"Database error: {e}")
         return None
 
-# ==================== 의존성: 현재 사용자 정보 추출 ====================
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
