@@ -338,7 +338,12 @@ function App() {
 
 	// Get todos by date
 	const getTodosByDate = (dateString: string) => {
-		return save.filter(todo => todo.event_date === dateString);
+		const todosForDate = save.filter(todo => todo.event_date === dateString);
+		// Apply hideCompleted filter
+		if (hideCompleted) {
+			return todosForDate.filter(todo => !todo.status);
+		}
+		return todosForDate;
 	};
 
 	// Get todo count for a specific date
@@ -449,11 +454,23 @@ function App() {
 	};
 
 	const handleLogout = () => {
+		// Clear authentication state
 		setIsLoggedIn(false);
 		setCurrentUser(null);
 		localStorage.removeItem("accessToken");
 		localStorage.removeItem("userId");
 		localStorage.removeItem("userEmail");
+
+		// Reset all page data
+		setSave([]);
+		setInputValue("");
+		setSortOrder("none");
+		setCalendarSortOrder("none");
+		setEditingIndex(null);
+		setEditValues(null);
+		setSelectedDate(null);
+		setHideCompleted(false);
+
 		alert("로그아웃 되었습니다.");
 	};
 
