@@ -39,14 +39,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-<<<<<<< HEAD
-=======
 # ==================== sign ====================
 
 @app.get("/signup")
 async def sign_up():
     return "d"
->>>>>>> bfc10a6240fc219405366072ef02ac3901a9a8c4
+
 # ==================== 기존 엔드포인트 ====================
 
 # default status
@@ -228,7 +226,6 @@ async def sendTodoList(data: TodoItem):
         )
 
 # ==================== Todos Save/Load ====================
-<<<<<<< HEAD
 
 class SaveTodoRequest(BaseModel):
     todos: List[TodoItem]
@@ -261,5 +258,3 @@ async def load_todos():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-=======
->>>>>>> bfc10a6240fc219405366072ef02ac3901a9a8c4
