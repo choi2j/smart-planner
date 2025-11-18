@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
-        case_sensitive = False  # 대소문자 구분 안함
+        case_sensitive = False
 
 settings = Settings()
 
@@ -73,7 +73,7 @@ app.add_middleware(
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
-    provider: str = "google"  # email, google, github 등
+    provider: str = "google"
 
 
 class LoginRequest(BaseModel):
@@ -82,9 +82,8 @@ class LoginRequest(BaseModel):
 
 
 class AccountResponse(BaseModel):
-    id: str
+    id: int
     user_id: str
-    email: str
     provider: str
 
 
@@ -98,10 +97,10 @@ class TokenResponse(BaseModel):
 class TodoItem(BaseModel):
     title: str
     description: Optional[str] = None
-    due_date: Optional[str] = None
-    due_time: Optional[str] = None
+    event_date: Optional[str] = None
+    event_time: Optional[str] = None
     location: Optional[str] = None
-    priority: Optional[str] = "medium"  # low, medium, high
+    priority: Optional[str] = "medium"
     status: bool = False
 
 
@@ -151,11 +150,9 @@ def create_access_token(user_id: str, email: str, expires_delta: Optional[timede
     return encoded_jwt
 
 
-def get_user_by_email(email: str) -> Optional[dict]:
-    """이메일로 계정 조회"""
+def get_user_by_user_id(user_id: str) -> Optional[dict]:
+    """user_id로 계정 조회"""
     try:
-        user_id = extract_user_id_from_email(email)
-        # user_id로 Supabase에서 조회
         response = supabase_client.table("account").select("*").eq("user_id", user_id).execute()
         if response.data and len(response.data) > 0:
             return response.data[0]
@@ -166,9 +163,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
 
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """
-    HTTP Bearer 토큰에서 현재 사용자 정보를 추출합니다.
-    """
+    """HTTP Bearer 토큰에서 현재 사용자 정보 추출"""
     token = credentials.credentials
     
     try:
@@ -193,8 +188,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             detail="유효하지 않은 토큰입니다."
         )
     
-    # 데이터베이스에서 사용자 정보 조회
-    account = get_user_by_email(email)
+    account = get_user_by_user_id(user_id)
     if not account:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -207,36 +201,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @app.post("/signup", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 async def signup(request: SignupRequest):
-    """
-    회원가입 엔드포인트
-    
-    요청:
-    {
-        "email": "dohan018018@gmail.com",
-        "password": "securepassword123",
-        "provider": "google"
-    }
-    """
+    """회원가입"""
     email = request.email.lower()
+    user_id = extract_user_id_from_email(email)
     
-    # 이미 존재하는 계정 확인
-    existing_account = get_user_by_email(email)
+    existing_account = get_user_by_user_id(user_id)
     if existing_account:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="이미 가입된 이메일입니다."
         )
     try:
-        # user_id 추출 (이메일의 @ 앞부분)
-        user_id = extract_user_id_from_email(email)
-        
-        # 비밀번호 해시
         hashed_password = hash_password(request.password)
         
-        # 데이터베이스에 저장
         response = supabase_client.table("account").insert({
             "user_id": user_id,
-            "email": email,
             "password": hashed_password,
             "provider": request.provider,
         }).execute()
@@ -246,7 +225,6 @@ async def signup(request: SignupRequest):
             return AccountResponse(
                 id=account.get("id"),
                 user_id=account.get("user_id"),
-                email=account.get("email"),
                 provider=account.get("provider"),
             )
         else:
@@ -267,34 +245,23 @@ async def signup(request: SignupRequest):
 
 @app.post("/signin", response_model=TokenResponse)
 async def login(request: LoginRequest):
-    """
-    로그인 엔드포인트
-    
-    요청:
-    {
-        "email": "dohan018018@gmail.com",
-        "password": "securepassword123"
-    }
-    """
+    """로그인"""
     email = request.email.lower()
+    user_id = extract_user_id_from_email(email)
     
-    # 계정 조회
-    account = get_user_by_email(email)
+    account = get_user_by_user_id(user_id)
     if not account:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="이메일 또는 비밀번호가 틀렸습니다."
         )
     
-    # 비밀번호 검증
     if not verify_password(request.password, account.get("password", "")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="이메일 또는 비밀번호가 틀렸습니다."
         )
     
-    # JWT 토큰 생성
-    user_id = account.get("user_id")
     access_token = create_access_token(user_id, email)
     
     return TokenResponse(
@@ -307,14 +274,10 @@ async def login(request: LoginRequest):
 
 @app.get("/me", response_model=AccountResponse)
 async def get_current_user_info(current_user = Depends(get_current_user)):
-    """
-    현재 인증된 사용자 정보 조회
-    Authorization: Bearer <token> 헤더 필요
-    """
+    """현재 사용자 정보 조회"""
     return AccountResponse(
         id=current_user.get("id"),
         user_id=current_user.get("user_id"),
-        email=current_user.get("email"),
         provider=current_user.get("provider"),
     )
 
@@ -356,8 +319,8 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         {{
         "title": "할 일 제목 (간결하게)",
         "description": "할 일에 대한 상세 설명",
-        "due_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만 없을경우 null)",
-        "due_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만 없을경우 null)",
+        "event_date": "마감일 (YYYY-MM-DD 형식, 언급된 경우만 없을경우 null)",
+        "event_time": "마감날의 정확한 시간(HH:MM 형식, 언급된 경우만 없을경우 null)",
         "location": "해당 행동이 행해져야하는 위치",
         "priority": "low/medium/high 중 하나",
         "status": false
@@ -381,8 +344,8 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         {{
             "title": "보고서 작성",
             "description": "내일까지 완료해야 하는 보고서",
-            "due_date": "2025-11-18",
-            "due_time": "10:00",
+            "event_date": "2025-11-18",
+            "event_time": "10:00",
             "location": "회사",
             "priority": "high",
             "status": false
@@ -390,8 +353,8 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
         {{
             "title": "장 보기",
             "description": "우유와 계란을 사야 함",
-            "due_date": null,
-            "due_time": null,
+            "event_date": null,
+            "event_time": null,
             "location": null,
             "priority": "medium",
             "status": false
@@ -402,9 +365,7 @@ TODO_EXTRACTION_PROMPT = """당신은 사용자의 평문 메시지를 분석하
 
 @app.post("/todo-request", response_model=TodoResponse)
 async def parse_todo(request: TodoRequest):
-    """
-    AI를 사용하여 평문 메시지를 Todo 목록으로 변환
-    """
+    """AI를 사용하여 평문 메시지를 Todo 목록으로 변환"""
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         prompt = TODO_EXTRACTION_PROMPT.format(
@@ -414,7 +375,6 @@ async def parse_todo(request: TodoRequest):
         response = model.generate_content(prompt)
         response_text = response.text.strip()
 
-        # AI 응답에서 JSON 부분만 추출
         try:
             start_index = response_text.find('{')
             end_index = response_text.rfind('}') + 1
@@ -428,7 +388,6 @@ async def parse_todo(request: TodoRequest):
             print(f"JSON 서브셋 추출 실패: {e}\n원본 응답: {response_text}")
             raise json.JSONDecodeError("Failed to extract JSON subset", response_text, 0)
         
-        # JSON 마크다운 제거
         if json_string.startswith("```json"):
             json_string = json_string[7:]
         if json_string.startswith("```"):
@@ -459,19 +418,16 @@ async def parse_todo(request: TodoRequest):
         )
 
 
-@app.post('/send-todo')
-async def send_todo_list(data: TodoItem, current_user = Depends(get_current_user)):
-    """
-    인증된 사용자의 Todo 저장
-    Authorization: Bearer <token> 헤더 필요
-    """
+@app.post('/send-task')
+async def send_task(data: TodoItem, current_user = Depends(get_current_user)):
+    """인증된 사용자의 Task 저장"""
     try:
-        response = supabase_client.table("todos").insert({
+        response = supabase_client.table("tasks").insert({
             "user_id": current_user.get("user_id"),
             "title": data.title,
             "description": data.description,
-            "due_date": data.due_date,
-            "due_time": data.due_time,
+            "event_date": data.event_date,
+            "event_time": data.event_time,
             "location": data.location,
             "priority": data.priority,
             "status": data.status
@@ -481,56 +437,50 @@ async def send_todo_list(data: TodoItem, current_user = Depends(get_current_user
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Todo 저장 중 오류 발생: {str(e)}"
+            detail=f"Task 저장 중 오류 발생: {str(e)}"
         )
 
 
-@app.post('/todos/save')
-async def save_todos(request: SaveTodoRequest, current_user = Depends(get_current_user)):
-    """
-    여러 할 일 저장
-    Authorization: Bearer <token> 헤더 필요
-    """
+@app.post('/tasks/save')
+async def save_tasks(request: SaveTodoRequest, current_user = Depends(get_current_user)):
+    """여러 Task 저장"""
     try:
-        todos_data = []
-        for todo in request.todos:
-            todos_data.append({
+        tasks_data = []
+        for task in request.todos:
+            tasks_data.append({
                 "user_id": current_user.get("user_id"),
-                "title": todo.title,
-                "description": todo.description,
-                "due_date": todo.due_date,
-                "due_time": todo.due_time,
-                "location": todo.location,
-                "priority": todo.priority,
-                "status": todo.status
+                "title": task.title,
+                "description": task.description,
+                "event_date": task.event_date,
+                "event_time": task.event_time,
+                "location": task.location,
+                "priority": task.priority,
+                "status": task.status
             })
         
-        response = supabase_client.table("todos").insert(todos_data).execute()
+        response = supabase_client.table("tasks").insert(tasks_data).execute()
         return {"success": True, "count": len(response.data)}
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Todos 저장 중 오류 발생: {str(e)}"
+            detail=f"Tasks 저장 중 오류 발생: {str(e)}"
         )
 
 
-@app.get('/todos/load', response_model=List[TodoItem])
-async def load_todos(current_user = Depends(get_current_user)):
-    """
-    사용자의 할 일 목록 로드
-    Authorization: Bearer <token> 헤더 필요
-    """
+@app.get('/tasks/load', response_model=List[TodoItem])
+async def load_tasks(current_user = Depends(get_current_user)):
+    """사용자의 Task 목록 로드"""
     try:
-        response = supabase_client.table("todos").select("*").eq(
+        response = supabase_client.table("tasks").select("*").eq(
             "user_id", current_user.get("user_id")
         ).execute()
         
-        todos = [TodoItem(**todo) for todo in response.data]
-        return todos
+        tasks = [TodoItem(**task) for task in response.data]
+        return tasks
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Todos 로드 중 오류 발생: {str(e)}"
+            detail=f"Tasks 로드 중 오류 발생: {str(e)}"
         )
 
 
